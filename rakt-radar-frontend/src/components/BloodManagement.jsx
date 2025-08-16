@@ -60,25 +60,13 @@ const BloodManagement = () => {
       const matches = data.matches || [];
       setAiMatches(matches);
       
-      // Check for critical matches and show alerts
-      const criticalMatches = matches.filter(match => match.urgency === 'critical');
-      if (criticalMatches.length > 0) {
-        showCriticalAlert(criticalMatches);
-      }
+
     } catch (error) {
       console.error('Error checking matches:', error);
     }
   };
 
-  const showCriticalAlert = (matches) => {
-    const message = `🚨 CRITICAL: ${matches.length} blood match(es) found!\n\n` +
-      matches.map(match => 
-        `${match.blood_type} blood needed at ${match.entity_name} (${match.city})\n` +
-        `Distance: ${match.distance_km}km | Urgency: ${match.urgency}`
-      ).join('\n\n');
-    
-    alert(message);
-  };
+
 
   const handleAddUnit = async () => {
     try {
