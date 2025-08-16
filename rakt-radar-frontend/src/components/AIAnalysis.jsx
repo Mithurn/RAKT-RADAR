@@ -6,18 +6,22 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Progress } from './ui/progress';
 import { Badge } from './ui/badge';
-import { Loader2, Brain, MapPin, Clock, TrendingUp, CheckCircle, AlertCircle } from 'lucide-react';
+import { Loader2, Brain, MapPin, Clock, TrendingUp, CheckCircle, AlertCircle, ShoppingCart, Truck } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const AIAnalysis = () => {
+  const navigate = useNavigate();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisSteps, setAnalysisSteps] = useState([]);
   const [aiResults, setAiResults] = useState(null);
   const [currentStep, setCurrentStep] = useState(0);
+  const [selectedBloodUnit, setSelectedBloodUnit] = useState(null);
+  const [isOrdering, setIsOrdering] = useState(false);
   const [bloodRequest, setBloodRequest] = useState({
     blood_type: 'O+',
     quantity_ml: 450,
     urgency: 'high',
-    location: 'Mumbai'
+    location: 'Chennai'
   });
 
   const bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
@@ -33,6 +37,7 @@ const AIAnalysis = () => {
     setAnalysisSteps([]);
     setAiResults(null);
     setCurrentStep(0);
+    setSelectedBloodUnit(null);
 
     try {
       const response = await fetch('http://localhost:8000/api/ai_blood_request', {
@@ -44,7 +49,7 @@ const AIAnalysis = () => {
           blood_type: bloodRequest.blood_type,
           quantity_ml: bloodRequest.quantity_ml,
           urgency: bloodRequest.urgency,
-          location: { lat: 19.0760, lng: 72.8777 } // Mumbai coordinates
+          location: { lat: 13.0827, lng: 80.2707 } // Chennai coordinates (Tamil Nadu)
         })
       });
 
@@ -66,6 +71,39 @@ const AIAnalysis = () => {
       console.error('AI Analysis failed:', error);
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const orderBlood = async (bloodUnit) => {
+    setIsOrdering(true);
+    try {
+      const response = await fetch('http://localhost:8000/api/order_blood', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          blood_unit_id: bloodUnit.id,
+          urgency: bloodRequest.urgency,
+          quantity_ml: bloodRequest.quantity_ml
+        })
+      });
+
+      const data = await response.json();
+      
+      if (data.status === 'success') {
+        // Redirect to unit tracking page
+        navigate('/unit-tracking', { 
+          state: { 
+            transferId: data.transfer_id,
+            transferDetails: data 
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Order failed:', error);
+    } finally {
+      setIsOrdering(false);
     }
   };
 
@@ -100,11 +138,14 @@ const AIAnalysis = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="blood_type">Blood Type Required</Label>
-              <Select value={bloodRequest.blood_type} onValueChange={(value) => setBloodRequest({...bloodRequest, blood_type: value})}>
+            <div>
+              <Label htmlFor="blood_type">Blood Type *</Label>
+              <Select 
+                value={bloodRequest.blood_type} 
+                onValueChange={(value) => setBloodRequest({...bloodRequest, blood_type: value})}
+              >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Select blood type" />
                 </SelectTrigger>
                 <SelectContent>
                   {bloodTypes.map(type => (
@@ -113,25 +154,14 @@ const AIAnalysis = () => {
                 </SelectContent>
               </Select>
             </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="quantity">Quantity (ml)</Label>
-              <Input
-                id="quantity"
-                type="number"
-                value={bloodRequest.quantity_ml}
-                onChange={(e) => setBloodRequest({...bloodRequest, quantity_ml: parseInt(e.target.value)})}
-                placeholder="450"
-              />
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
+            <div>
               <Label htmlFor="urgency">Urgency Level</Label>
-              <Select value={bloodRequest.urgency} onValueChange={(value) => setBloodRequest({...bloodRequest, urgency: value})}>
+              <Select 
+                value={bloodRequest.urgency} 
+                onValueChange={(value) => setBloodRequest({...bloodRequest, urgency: value})}
+              >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Select urgency" />
                 </SelectTrigger>
                 <SelectContent>
                   {urgencyLevels.map(level => (
@@ -144,27 +174,36 @@ const AIAnalysis = () => {
                 </SelectContent>
               </Select>
             </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="location">Location</Label>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="quantity">Quantity Needed (ml)</Label>
               <Input
-                id="location"
-                value={bloodRequest.location}
-                onChange={(e) => setBloodRequest({...bloodRequest, location: e.target.value})}
-                placeholder="Mumbai"
+                id="quantity"
+                type="number"
+                value={bloodRequest.quantity_ml}
+                onChange={(e) => setBloodRequest({...bloodRequest, quantity_ml: parseInt(e.target.value)})}
+                placeholder="450"
               />
             </div>
+            <div>
+              <Label>Destination Hospital</Label>
+              <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-md">
+                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                <span className="text-sm font-medium">SRM Global Hospitals (Chennai, Tamil Nadu)</span>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">Blood will be delivered to our hospital from other blood banks</p>
+            </div>
           </div>
-          
           <Button 
             onClick={startAIAnalysis} 
             disabled={isAnalyzing}
-            className="w-full bg-blue-600 hover:bg-blue-700"
+            className="w-full bg-red-600 hover:bg-red-700"
           >
             {isAnalyzing ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                AI is Analyzing...
+                AI Analyzing...
               </>
             ) : (
               <>
@@ -181,33 +220,26 @@ const AIAnalysis = () => {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+              <Brain className="w-6 h-6 text-purple-600" />
               AI Analysis in Progress
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
+            <p className="text-gray-600 mb-4">AI is thinking...</p>
+            <Progress value={(currentStep + 1) * (100 / 7)} className="mb-4" />
+            <p className="text-sm text-gray-500 mb-4">Step {currentStep + 1} of 7</p>
+            <div className="space-y-3">
               {analysisSteps.map((step, index) => (
-                <div key={step.step} className={`flex items-center gap-3 p-3 rounded-lg border ${
-                  step.status === 'completed' ? 'bg-green-50 border-green-200' : 
-                  index <= currentStep ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'
-                }`}>
-                  <div className={`p-2 rounded-full ${
-                    step.status === 'completed' ? 'bg-green-100' : 
-                    index <= currentStep ? 'bg-blue-100' : 'bg-gray-100'
-                  }`}>
+                <div key={step.step} className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
+                  <div className={`${getStepColor(step.step, step.status)}`}>
                     {getStepIcon(step.step)}
                   </div>
-                  
                   <div className="flex-1">
-                    <div className={`font-medium ${getStepColor(step.step, step.status)}`}>
-                      {step.message}
-                    </div>
-                    <div className="text-sm text-gray-600">{step.details}</div>
+                    <p className="font-medium">{step.message}</p>
+                    <p className="text-sm text-gray-600">{step.details}</p>
                   </div>
-                  
-                  <div className="w-20">
-                    <Progress value={step.progress} className="h-2" />
+                  <div className="w-16 h-1 bg-green-200 rounded-full">
+                    <div className="w-full h-1 bg-green-500 rounded-full"></div>
                   </div>
                 </div>
               ))}
@@ -226,74 +258,60 @@ const AIAnalysis = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-6">
-              {/* Analysis Summary */}
-              <div className="grid grid-cols-2 gap-4 p-4 bg-blue-50 rounded-lg">
-                <div>
-                  <div className="text-sm text-gray-600">Units Scanned</div>
-                  <div className="text-2xl font-bold text-blue-600">{aiResults.ai_summary.analysis_results.total_units_scanned}</div>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center p-4 bg-blue-50 rounded-lg">
+                  <p className="text-2xl font-bold text-blue-600">{aiResults.matches?.length || 0}</p>
+                  <p className="text-sm text-gray-600">Matches Found</p>
                 </div>
-                <div>
-                  <div className="text-sm text-gray-600">AI Confidence</div>
-                  <div className="text-2xl font-bold text-blue-600">{aiResults.ai_summary.analysis_results.ai_confidence_score.toFixed(1)}%</div>
-                </div>
-                <div>
-                  <div className="text-sm text-gray-600">Matches Found</div>
-                  <div className="text-2xl font-bold text-blue-600">{aiResults.ai_summary.analysis_results.optimal_matches_identified}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-gray-600">Lives Saved</div>
-                  <div className="text-2xl font-bold text-blue-600">{aiResults.ai_summary.recommendations.estimated_lives_saved}</div>
+                <div className="text-center p-4 bg-green-50 rounded-lg">
+                  <p className="text-2xl font-bold text-green-600">{aiResults.matches?.length || 0}</p>
+                  <p className="text-sm text-gray-600">Lives Saved</p>
                 </div>
               </div>
-
-              {/* Top Matches */}
-              <div>
-                <h3 className="text-lg font-semibold mb-3">Top AI Recommendations</h3>
+              
+              {aiResults.matches && aiResults.matches.length > 0 && (
                 <div className="space-y-3">
-                  {aiResults.matches.slice(0, 3).map((match, index) => (
-                    <div key={match.blood_unit_id} className="p-4 border rounded-lg">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <Badge className={index === 0 ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}>
-                            Priority {index + 1}
-                          </Badge>
-                          <Badge className="bg-purple-100 text-purple-800">
-                            AI Score: {match.ai_score}
-                          </Badge>
+                  <h3 className="font-semibold text-lg">Available Blood Units</h3>
+                  {aiResults.matches.map((match, index) => (
+                    <Card key={index} className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge variant="outline">{match.blood_type}</Badge>
+                            <Badge variant="outline">{match.quantity_ml}ml</Badge>
+                            <Badge className="bg-blue-100 text-blue-800">AI Score: {match.ai_score}%</Badge>
+                          </div>
+                          <p className="font-medium">{match.source_name}</p>
+                          <p className="text-sm text-gray-600">{match.source_city}, Tamil Nadu</p>
+                          <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
+                            <span>Distance: {match.distance_km}km</span>
+                            <span>Est. Time: {match.estimated_time_hours}h</span>
+                            <span>Route Quality: {match.route_quality}%</span>
+                          </div>
                         </div>
-                        <div className="text-sm text-gray-600">
-                          {match.distance_km}km • {match.estimated_time_hours}h
-                        </div>
+                        <Button 
+                          onClick={() => orderBlood(match)}
+                          disabled={isOrdering}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          {isOrdering ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Ordering...
+                            </>
+                          ) : (
+                            <>
+                              <ShoppingCart className="w-4 h-4 mr-2" />
+                              Order Blood
+                            </>
+                          )}
+                        </Button>
                       </div>
-                      
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="font-medium">Blood Unit:</span> {match.blood_type} ({match.quantity_ml}ml)
-                        </div>
-                        <div>
-                          <span className="font-medium">Expires in:</span> {match.days_until_expiry} days
-                        </div>
-                        <div>
-                          <span className="font-medium">Destination:</span> {match.entity_name}
-                        </div>
-                        <div>
-                          <span className="font-medium">Compatibility:</span> {match.compatibility_score}%
-                        </div>
-                      </div>
-                    </div>
+                    </Card>
                   ))}
                 </div>
-              </div>
-
-              {/* Waste Prevention Impact */}
-              <div className="p-4 bg-green-50 rounded-lg">
-                <h4 className="font-semibold text-green-800 mb-2">Waste Prevention Impact</h4>
-                <p className="text-green-700">
-                  {aiResults.ai_summary.recommendations.waste_prevention_potential} • 
-                  Estimated {aiResults.ai_summary.recommendations.estimated_lives_saved} lives saved
-                </p>
-              </div>
+              )}
             </div>
           </CardContent>
         </Card>

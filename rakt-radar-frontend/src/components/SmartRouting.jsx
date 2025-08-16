@@ -60,7 +60,7 @@ const SmartRouting = () => {
   const [emergencyRequest, setEmergencyRequest] = useState({
     blood_type: '',
     urgency: 'high',
-    hospital_id: '',
+    hospital_id: '', // Will be set when hospitals are loaded
     quantity_needed: ''
   });
 
@@ -71,6 +71,20 @@ const SmartRouting = () => {
     const interval = setInterval(fetchMatches, 15000);
     return () => clearInterval(interval);
   }, []);
+
+  // Set default hospital when hospitals are loaded
+  useEffect(() => {
+    if (hospitals.length > 0 && !emergencyRequest.hospital_id) {
+      // Find SRM Global Hospitals or use the first hospital
+      const srmHospital = hospitals.find(h => h.name.includes('SRM') || h.name.includes('Global'));
+      const defaultHospital = srmHospital || hospitals[0];
+      setEmergencyRequest(prev => ({
+        ...prev,
+        hospital_id: defaultHospital.id
+      }));
+      console.log('Default hospital set:', defaultHospital);
+    }
+  }, [hospitals, emergencyRequest.hospital_id]);
 
   useEffect(() => {
     console.log('SmartRouting - State updated:', {
@@ -122,22 +136,67 @@ const SmartRouting = () => {
             // Mark this match as processed
             processedMatchesRef.current.add(matchKey);
             
-            // Create realistic hospital emergency scenarios
+            // Create realistic SRM Global Hospitals emergency scenarios
             const emergencyScenarios = [
               {
-                hospital: "AIIMS Hyderabad 1",
-                city: "Hyderabad",
+                hospital: "SRM Global Hospitals",
+                city: "Chennai",
                 scenario: "Trauma Center - Multiple accident victims"
               },
               {
-                hospital: "Narayana Health Ahmedabad 2", 
-                city: "Ahmedabad",
+                hospital: "SRM Global Hospitals", 
+                city: "Chennai",
                 scenario: "Emergency Surgery - Critical patient"
               },
               {
-                hospital: "Narayana Health Hyderabad 3",
-                city: "Hyderabad", 
+                hospital: "SRM Global Hospitals",
+                city: "Chennai", 
                 scenario: "ICU - Severe blood loss"
+              },
+              {
+                hospital: "SRM Global Hospitals",
+                city: "Chennai",
+                scenario: "Cardiac Emergency - Blood transfusion needed"
+              },
+              {
+                hospital: "SRM Global Hospitals",
+                city: "Chennai",
+                scenario: "Emergency Department - Trauma case"
+              },
+              {
+                hospital: "SRM Global Hospitals",
+                city: "Chennai",
+                scenario: "Emergency Surgery - Trauma case"
+              },
+              {
+                hospital: "Chettinad Hospital",
+                city: "Chennai",
+                scenario: "ICU - Critical care blood requirement"
+              },
+              {
+                hospital: "MIOT International",
+                city: "Chennai",
+                scenario: "Emergency Department - Accident victims"
+              },
+              {
+                hospital: "Coimbatore Medical College Hospital",
+                city: "Coimbatore",
+                scenario: "Emergency Department - Critical trauma case"
+              },
+              {
+                hospital: "Madurai Medical College Hospital",
+                city: "Madurai",
+                scenario: "ICU - Severe blood loss emergency"
+              },
+              {
+                hospital: "Salem Government Hospital",
+                city: "Salem",
+                scenario: "Emergency Surgery - Blood transfusion needed"
+              },
+              {
+                hospital: "Vellore Medical Center",
+                city: "Vellore",
+                scenario: "Trauma Center - Multiple victims"
               }
             ];
             
@@ -150,7 +209,7 @@ const SmartRouting = () => {
               blood_type: match.blood_type,
               hospital: scenario.hospital,
               city: scenario.city,
-              distance: Math.round((Math.random() * 20 + 5) * 100) / 100, // Random distance 5-25km
+              distance: Math.round((Math.random() * 15 + 3) * 100) / 100, // Random distance 3-18km for Tamil Nadu
               message: `CRITICAL: ${match.blood_type} blood needed at ${scenario.scenario}`
             });
           });
@@ -243,6 +302,8 @@ const SmartRouting = () => {
   };
 
   const handleEmergencyRequest = async () => {
+    console.log('🚨 Emergency request started:', emergencyRequest);
+    
     if (!emergencyRequest.blood_type || !emergencyRequest.hospital_id || !emergencyRequest.quantity_needed) {
       alert('Please fill in all required fields');
       return;
@@ -281,26 +342,44 @@ const SmartRouting = () => {
         await new Promise(resolve => setTimeout(resolve, 800));
       }
 
-              // Find best matches
-        const availableUnits = bloodUnits.filter(unit => 
-          unit.blood_type === emergencyRequest.blood_type && 
-          unit.status === 'available' &&
-          !unit.is_flagged_for_expiry
-        );
+      console.log('✅ AI analysis steps completed, finding matches...');
 
-        console.log('Available units found:', availableUnits);
-        console.log('Blood units total:', bloodUnits);
-        console.log('Requested blood type:', emergencyRequest.blood_type);
+      // Find best matches - prioritize Tamil Nadu blood banks for optimal distance
+      const availableUnits = bloodUnits.filter(unit => 
+        unit.blood_type === emergencyRequest.blood_type && 
+        unit.status === 'available' &&
+        !unit.is_flagged_for_expiry
+      );
+      
+      console.log('Available units found:', availableUnits.length);
+      
+      const destinationHospital = hospitals.find(h => h.id === emergencyRequest.hospital_id);
+      console.log('Destination hospital:', destinationHospital);
+      
+      if (availableUnits.length > 0) {
+        // Sort by distance to destination (Tamil Nadu hospitals only)
+        const sortedUnits = availableUnits.sort((a, b) => {
+          const sourceBankA = bloodBanks.find(bank => bank.id === a.blood_bank_id);
+          const sourceBankB = bloodBanks.find(bank => bank.id === b.blood_bank_id);
+          
+          if (!sourceBankA || !sourceBankB) return 0;
+          
+          const distanceA = calculateOptimalRoute(sourceBankA, destinationHospital).distance;
+          const distanceB = calculateOptimalRoute(sourceBankB, destinationHospital).distance;
+          
+          return distanceA - distanceB; // Sort by shortest distance first
+        });
 
-        if (availableUnits.length > 0) {
-          const bestMatch = availableUnits[0];
-          const sourceBank = bloodBanks.find(b => b.id === bestMatch.blood_bank_id);
-          const destinationHospital = hospitals.find(h => h.id === emergencyRequest.hospital_id);
+        const bestMatch = sortedUnits[0];
+        const sourceBank = bloodBanks.find(b => b.id === bestMatch.blood_bank_id);
+        const route = calculateOptimalRoute(sourceBank, destinationHospital);
+        
+        console.log('Best match found:', bestMatch);
+        console.log('Source bank:', sourceBank);
+        console.log('Route calculated:', route);
           
-          const route = calculateOptimalRoute(sourceBank, destinationHospital);
-          
-          // Create AI results for demo
-          const demoResults = {
+        // Create AI results for demo
+        const demoResults = {
           ai_summary: {
             analysis_results: {
               total_units_scanned: bloodUnits.length,
@@ -318,7 +397,7 @@ const SmartRouting = () => {
               safety_recommendations: 'Safe route with minimal traffic'
             }
           },
-          matches: availableUnits.map(unit => {
+          matches: sortedUnits.map(unit => {
             const sourceBank = bloodBanks.find(b => b.id === unit.blood_bank_id);
             return {
               blood_unit_id: unit.id,
@@ -331,6 +410,11 @@ const SmartRouting = () => {
               estimated_time_hours: route.estimatedHours,
               ai_score: Math.floor(Math.random() * 20) + 80,
               compatibility_score: 100,
+              coordinates: {
+                source: sourceBank ? [sourceBank.latitude || 13.0827, sourceBank.longitude || 80.2707] : [13.0827, 80.2707],
+                destination: [destinationHospital.latitude || 13.0067, destinationHospital.longitude || 80.2206],
+                current: [13.0447, 80.2456]
+              },
               smart_routing: {
                 estimated_time_minutes: Math.floor(route.distance * 0.8),
                 route_quality: 'excellent',
@@ -342,9 +426,8 @@ const SmartRouting = () => {
           })
         };
 
-        console.log('Setting AI results:', demoResults);
         setAiResults(demoResults);
-        addLiveUpdate(`✅ AI found ${availableUnits.length} optimal match(es)!`, 'success');
+        addLiveUpdate(`✅ AI found ${sortedUnits.length} optimal match(es)!`, 'success');
         
         setSelectedMatch({
           ...bestMatch,
@@ -353,80 +436,94 @@ const SmartRouting = () => {
           route,
           emergency: true
         });
-              } else {
-          // For demo purposes, create mock results even if no real blood units found
-          console.log('No real blood units found, creating demo results');
-          const mockRoute = {
-            distance: 25.5,
-            estimatedHours: 1,
-            coordinates: [[72.8777, 19.0760], [72.8777, 19.0760]]
-          };
-          
-          const demoResults = {
-            ai_summary: {
-              analysis_results: {
-                total_units_scanned: bloodUnits.length,
-                ai_confidence_score: 95.8,
-                optimal_matches_identified: 2
+      } else {
+        // For demo purposes, create mock results even if no real blood units found
+        console.log('No real blood units found, creating demo results...');
+        
+        const mockRoute = {
+          distance: 25.5,
+          estimatedHours: 1,
+          coordinates: [[72.8777, 19.0760], [72.8777, 19.0760]]
+        };
+        
+        const demoResults = {
+          ai_summary: {
+            analysis_results: {
+              total_units_scanned: bloodUnits.length,
+              ai_confidence_score: 95.8,
+              optimal_matches_identified: 2
+            },
+            recommendations: {
+              waste_prevention_potential: 'High efficiency route identified',
+              estimated_lives_saved: Math.floor(Math.random() * 5) + 1
+            },
+            smart_routing_insights: {
+              fastest_route_minutes: Math.floor(mockRoute.distance * 0.8),
+              route_optimization_score: 94,
+              total_routes_analyzed: 12,
+              safety_recommendations: 'Safe route with minimal traffic'
+            }
+          },
+          matches: [
+            {
+              blood_unit_id: 'demo-1',
+              blood_type: emergencyRequest.blood_type,
+              quantity_ml: 450,
+              entity_name: 'Apollo Hospital Chennai',
+              source_blood_bank: 'Chennai Central Blood Bank',
+              source_location: 'Chennai, Tamil Nadu',
+              distance_km: mockRoute.distance,
+              estimated_time_hours: mockRoute.estimatedHours,
+              ai_score: 95,
+              compatibility_score: 100,
+              coordinates: {
+                source: [13.0827, 80.2707],
+                destination: [13.0067, 80.2206],
+                current: [13.0447, 80.2456]
               },
-              recommendations: {
-                waste_prevention_potential: 'High efficiency route identified',
-                estimated_lives_saved: Math.floor(Math.random() * 5) + 1
-              },
-              smart_routing_insights: {
-                fastest_route_minutes: Math.floor(mockRoute.distance * 0.8),
-                route_optimization_score: 94,
-                total_routes_analyzed: 12,
-                safety_recommendations: 'Safe route with minimal traffic'
+              smart_routing: {
+                estimated_time_minutes: Math.floor(mockRoute.distance * 0.8),
+                route_quality: 'excellent',
+                traffic_status: 'clear',
+                fuel_cost_estimate: Math.floor(mockRoute.distance * 0.5),
+                recommended_departure_time: new Date(Date.now() + 30 * 60000).toLocaleTimeString()
               }
             },
-            matches: [
-              {
-                blood_unit_id: 'demo-1',
-                blood_type: emergencyRequest.blood_type,
-                quantity_ml: 450,
-                entity_name: 'Demo Hospital',
-                source_blood_bank: 'Central Blood Bank Mumbai',
-                source_location: 'Mumbai, Maharashtra',
-                distance_km: mockRoute.distance,
-                estimated_time_hours: mockRoute.estimatedHours,
-                ai_score: 95,
-                compatibility_score: 100,
-                smart_routing: {
-                  estimated_time_minutes: Math.floor(mockRoute.distance * 0.8),
-                  route_quality: 'excellent',
-                  traffic_status: 'clear',
-                  fuel_cost_estimate: Math.floor(mockRoute.distance * 0.5),
-                  recommended_departure_time: new Date(Date.now() + 30 * 60000).toLocaleTimeString()
-                }
+            {
+              blood_unit_id: 'demo-2',
+              blood_type: emergencyRequest.blood_type,
+              quantity_ml: 500,
+              entity_name: 'Fortis Malar Hospital',
+              source_blood_bank: 'Chennai Central Blood Bank',
+              source_location: 'Chennai, Tamil Nadu',
+              distance_km: mockRoute.distance + 5,
+              estimated_time_hours: mockRoute.estimatedHours + 1,
+              ai_score: 88,
+              compatibility_score: 100,
+              coordinates: {
+                source: [13.0827, 80.2707],
+                destination: [13.0067, 80.2206],
+                current: [13.0447, 80.2456]
               },
-              {
-                blood_unit_id: 'demo-2',
-                blood_type: emergencyRequest.blood_type,
-                quantity_ml: 500,
-                entity_name: 'Demo Hospital',
-                source_blood_bank: 'Regional Blood Center',
-                source_location: 'Mumbai, Maharashtra',
-                distance_km: mockRoute.distance + 5,
-                estimated_time_hours: mockRoute.estimatedHours + 1,
-                ai_score: 88,
-                compatibility_score: 100,
-                smart_routing: {
-                  estimated_time_minutes: Math.floor((mockRoute.distance + 5) * 0.8),
-                  route_quality: 'good',
-                  traffic_status: 'moderate',
-                  fuel_cost_estimate: Math.floor((mockRoute.distance + 5) * 0.5),
-                  recommended_departure_time: new Date(Date.now() + 60 * 60000).toLocaleTimeString()
-                }
+              smart_routing: {
+                estimated_time_minutes: Math.floor((mockRoute.distance + 5) * 0.8),
+                route_quality: 'good',
+                traffic_status: 'moderate',
+                fuel_cost_estimate: Math.floor((mockRoute.distance + 5) * 0.5),
+                recommended_departure_time: new Date(Date.now() + 60 * 60000).toLocaleTimeString()
               }
-            ]
-          };
-          
-          console.log('Setting demo results:', demoResults);
-          setAiResults(demoResults);
-          addLiveUpdate(`✅ AI found 2 demo matches for ${emergencyRequest.blood_type} blood!`, 'success');
-        }
+            }
+          ]
+        };
+
+        setAiResults(demoResults);
+        addLiveUpdate(`✅ AI found 2 demo matches for ${emergencyRequest.blood_type} blood!`, 'success');
+      }
+      
+      console.log('🎯 Emergency request processing completed successfully!');
+      
     } catch (error) {
+      console.error('❌ Error in emergency request:', error);
       addLiveUpdate('❌ Error processing emergency request', 'error');
     } finally {
       setIsAIAnalyzing(false);
@@ -434,6 +531,11 @@ const SmartRouting = () => {
   };
 
   const calculateOptimalRoute = (source, destination) => {
+    // Ensure both source and destination are in Tamil Nadu for optimal routing
+    if (source.state !== 'Tamil Nadu' || destination.state !== 'Tamil Nadu') {
+      console.warn('Route calculation: Both source and destination should be in Tamil Nadu for optimal distance calculation');
+    }
+    
     // Calculate distance using Haversine formula
     const lat1 = source.latitude;
     const lon1 = source.longitude;
@@ -449,7 +551,7 @@ const SmartRouting = () => {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     const distance = R * c;
     
-    // Calculate estimated travel time (assuming 60 km/h average)
+    // Calculate estimated travel time (assuming 60 km/h average for Tamil Nadu roads)
     const estimatedHours = Math.ceil(distance / 60);
     
     return {
@@ -577,11 +679,26 @@ const SmartRouting = () => {
       setIsProcessing(true);
       addLiveUpdate(`🚨 Processing emergency response for ${alert.blood_type} blood...`, 'info');
 
-      // Find the blood unit to transfer
-      const bloodUnit = bloodUnits.find(unit => 
+      // Find the blood unit to transfer - prioritize Tamil Nadu blood banks
+      const availableUnits = bloodUnits.filter(unit => 
         unit.blood_type === alert.blood_type && 
         unit.status === 'available'
       );
+      
+      // Sort by distance to destination hospital (Tamil Nadu optimization)
+      const sortedUnits = availableUnits.sort((a, b) => {
+        const sourceBankA = bloodBanks.find(bank => bank.id === a.blood_bank_id);
+        const sourceBankB = bloodBanks.find(bank => bank.id === b.blood_bank_id);
+        
+        if (!sourceBankA || !sourceBankB) return 0;
+        
+        const distanceA = calculateOptimalRoute(sourceBankA, hospital).distance;
+        const distanceB = calculateOptimalRoute(sourceBankB, hospital).distance;
+        
+        return distanceA - distanceB; // Sort by shortest distance first
+      });
+      
+      const bloodUnit = sortedUnits[0];
 
       if (!bloodUnit) {
         addLiveUpdate('❌ No available blood unit found for transfer', 'error');
@@ -630,7 +747,7 @@ const SmartRouting = () => {
       }
 
       // Add success message with route details
-      addLiveUpdate(`✅ EMERGENCY RESPONDED! ${alert.blood_type} blood transferred to ${alert.hospital}. Route: ${routeInfo.distance}km, ${routeInfo.estimatedHours}h. Lives saved: ${livesSaved + 1}`, 'success');
+      addLiveUpdate(`✅ EMERGENCY RESPONDED! ${alert.blood_type} blood transferred to ${alert.hospital}. Route: ${routeInfo.distance}km, ${routeInfo.estimatedHours}h. Lives saved: ${livesSaved + 1}. Local network optimization ensured fastest response!`, 'success');
       
       // Refresh data to show updated state
       fetchData();
@@ -672,8 +789,20 @@ const SmartRouting = () => {
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Smart Routing & AI Matching</h1>
-          <p className="text-gray-600">AI-powered blood distribution optimization with real-time routing</p>
+          <div className="flex items-center justify-between w-full">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Emergency Blood Requests</h1>
+              <p className="text-gray-600">AI-powered blood matching and route optimization using Chennai blood bank network</p>
+              <div className="mt-2 flex items-center space-x-2">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-sm text-green-600 font-medium">Chennai network integration - Fast emergency response from local blood banks</span>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-lg font-semibold text-blue-600">SRM Global Hospitals</div>
+              <div className="text-sm text-gray-500">Chennai, Tamil Nadu</div>
+            </div>
+          </div>
         </div>
 
         {/* Loading State */}
@@ -749,6 +878,10 @@ const SmartRouting = () => {
                   <span>Emergency Blood Request</span>
                 </CardTitle>
                 <CardDescription>AI will immediately find the best available blood units and calculate optimal routes</CardDescription>
+                <div className="mt-2 flex items-center space-x-2">
+                  <MapPin className="h-4 w-4 text-green-600" />
+                  <span className="text-sm text-green-700">Local network optimization - Faster response times, shorter distances</span>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -793,23 +926,22 @@ const SmartRouting = () => {
                   
                   <div>
                     <Label htmlFor="hospital">Destination Hospital</Label>
-                    <Select value={emergencyRequest.hospital_id} onValueChange={(value) => setEmergencyRequest({...emergencyRequest, hospital_id: value})}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select hospital" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {hospitals.map(hospital => (
-                          <SelectItem key={hospital.id} value={hospital.id}>{hospital.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex items-center space-x-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      <span className="text-sm font-medium text-blue-800">SRM Global Hospitals</span>
+                      <span className="text-xs text-blue-600">(Chennai, Tamil Nadu)</span>
+                    </div>
+                    <div className="mt-1 text-xs text-green-600 flex items-center gap-1">
+                      <MapPin className="w-3 h-3" />
+                      <span>Blood will be delivered to our hospital from other blood banks</span>
+                    </div>
                   </div>
                 </div>
                 
                 <div className="mt-4">
                   <Button 
                     onClick={handleEmergencyRequest}
-                    disabled={isAIAnalyzing || !emergencyRequest.blood_type || !emergencyRequest.hospital_id || !emergencyRequest.quantity_needed}
+                    disabled={isAIAnalyzing || !emergencyRequest.blood_type || !emergencyRequest.quantity_needed}
                     className="bg-red-600 hover:bg-red-700"
                   >
                     <Zap className="h-4 w-4 mr-2" />
@@ -910,6 +1042,12 @@ const SmartRouting = () => {
                             <Route className="w-4 h-4" />
                             Smart Routing Solutions
                           </h5>
+                          <div className="mb-3 p-2 bg-green-50 border border-green-200 rounded-lg">
+                            <div className="text-xs text-green-700 flex items-center gap-2">
+                              <MapPin className="w-3 h-3" />
+                              <span>Local network optimization ensures fastest regional routes with minimal traffic</span>
+                            </div>
+                          </div>
                           <div className="grid grid-cols-2 gap-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
                             <div>
                               <div className="text-sm text-gray-600">Fastest Route</div>
@@ -946,6 +1084,12 @@ const SmartRouting = () => {
                             <CheckCircle className="w-4 h-4" />
                             Available Blood Units ({aiResults.matches.length})
                           </h5>
+                          <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                            <div className="text-xs text-blue-700 flex items-center gap-2">
+                              <MapPin className="w-3 h-3" />
+                              <span>All routes optimized for local network - distances calculated for fastest regional transfer</span>
+                            </div>
+                          </div>
                           <div className="space-y-3">
                             {aiResults.matches.map((match, index) => (
                               <div 
@@ -969,6 +1113,7 @@ const SmartRouting = () => {
                                   <div className="text-right">
                                     <div className="text-sm text-gray-600">AI Score</div>
                                     <div className="text-lg font-bold text-blue-600">{match.ai_score}%</div>
+                                    <div className="text-xs text-green-600">TN optimized</div>
                                   </div>
                                 </div>
                                 
@@ -981,24 +1126,32 @@ const SmartRouting = () => {
                                   <div className="text-xs text-gray-500 mt-1">
                                     {match.source_location || 'Location details available'}
                                   </div>
+                                  <div className="mt-2 text-xs text-green-600 flex items-center gap-1">
+                                    <MapPin className="w-3 h-3" />
+                                    <span>Local blood bank - optimized for regional transfer</span>
+                                  </div>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4 text-sm mb-3">
                                   <div>
                                     <span className="text-gray-600">Distance:</span>
                                     <div className="font-medium">{match.distance_km}km</div>
+                                    <div className="text-xs text-green-600">TN local</div>
                                   </div>
                                   <div>
                                     <span className="text-gray-600">Est. Time:</span>
                                     <div className="font-medium">{match.estimated_time_hours}h</div>
+                                    <div className="text-xs text-green-600">Local roads</div>
                                   </div>
                                   <div>
                                     <span className="text-gray-600">Route Quality:</span>
                                     <div className="font-medium capitalize">{match.smart_routing.route_quality}</div>
+                                    <div className="text-xs text-green-600">TN optimized</div>
                                   </div>
                                   <div>
                                     <span className="text-gray-600">Fuel Cost:</span>
                                     <div className="font-medium">₹{match.smart_routing.fuel_cost_estimate}</div>
+                                    <div className="text-xs text-green-600">Local rates</div>
                                   </div>
                                 </div>
 
@@ -1010,10 +1163,10 @@ const SmartRouting = () => {
                                       </div>
                                       <Button 
                                         onClick={() => {
-                                          // Store transfer data in localStorage for the tracking page
+                                          // Store transfer data in localStorage for future use
                                           localStorage.setItem('currentTransfer', JSON.stringify(match));
-                                          // Navigate to unit tracking page
-                                          navigate('/unit-tracking');
+                                          // For now, just show a success message
+                                          addLiveUpdate(`✅ Transfer initiated for ${match.blood_type} blood from ${match.entity_name}`, 'success');
                                         }}
                                         disabled={isProcessing}
                                         className="bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 text-white"
@@ -1021,6 +1174,9 @@ const SmartRouting = () => {
                                         <Truck className="w-4 h-4 mr-2" />
                                         {isProcessing ? 'Processing...' : 'Track Transfer'}
                                       </Button>
+                                      <div className="mt-1 text-xs text-green-600 text-center">
+                                        Local network optimized
+                                      </div>
                                     </div>
                                   </div>
                                 )}
@@ -1052,42 +1208,65 @@ const SmartRouting = () => {
               <div className="text-6xl mb-4">🚨</div>
               <h2 className="text-2xl font-bold text-red-600 mb-2">EMERGENCY ALERT!</h2>
               <p className="text-gray-700 mb-4">{currentEmergency.message}</p>
+              <div className="mb-4 p-2 bg-green-50 border border-green-200 rounded-lg">
+                <div className="text-xs text-green-700 text-center">
+                  🚑 Local network activated - Fastest regional response guaranteed
+                </div>
+              </div>
               
               <div className="space-y-2 text-sm text-gray-600 mb-6">
                 <div className="flex justify-between">
                   <span>Blood Type:</span>
                   <span className="font-medium">{currentEmergency.blood_type}</span>
                 </div>
+                <div className="text-xs text-green-600 text-center mt-1">
+                  Available in local network
+                </div>
                 <div className="flex justify-between">
                   <span>Hospital:</span>
                   <span className="font-medium">{currentEmergency.hospital}</span>
+                </div>
+                <div className="text-xs text-green-600 text-center mt-1">
+                  Local facility
                 </div>
                 <div className="flex justify-between">
                   <span>Distance:</span>
                   <span className="font-medium">{currentEmergency.distance}km</span>
                 </div>
+                <div className="text-xs text-green-600 text-center mt-1">
+                  Local regional distance
+                </div>
                 <div className="flex justify-between">
                   <span>Priority:</span>
                   <span className="font-medium text-red-600">CRITICAL</span>
                 </div>
+                <div className="flex justify-between">
+                  <span>Network:</span>
+                  <span className="font-medium text-green-600">Local</span>
+                </div>
               </div>
               
-              <div className="flex space-x-3">
-                <Button 
-                  onClick={() => handleEmergencyResponse(currentEmergency.id)}
-                  className="bg-green-600 hover:bg-green-700 text-white flex-1"
-                >
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  RESPOND NOW
-                </Button>
-                <Button 
-                  onClick={closeEmergencyModal}
-                  variant="outline"
-                  className="flex-1"
-                >
-                  <Clock className="h-4 w-4 mr-2" />
-                  LATER
-                </Button>
+              <div className="space-y-3">
+                <div className="flex space-x-3">
+                  <Button 
+                    onClick={() => handleEmergencyResponse(currentEmergency.id)}
+                    className="bg-green-600 hover:bg-green-700 text-white flex-1"
+                  >
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    RESPOND NOW
+                  </Button>
+                  <Button 
+                    onClick={closeEmergencyModal}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    <Clock className="h-4 w-4 mr-2" />
+                    LATER
+                  </Button>
+                </div>
+                <div className="text-xs text-green-600 text-center">
+                  Local network activated - Fastest regional response
+                </div>
               </div>
             </div>
           </div>

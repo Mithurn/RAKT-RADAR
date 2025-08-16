@@ -11,7 +11,7 @@ const API_BASE = 'http://localhost:8000/api';
 
 const BloodManagement = () => {
   const [bloodUnits, setBloodUnits] = useState([]);
-  const [bloodBanks, setBloodBanks] = useState([]);
+
   const [isAdding, setIsAdding] = useState(false);
   const [editingUnit, setEditingUnit] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -23,10 +23,7 @@ const BloodManagement = () => {
     quantity_ml: '',
     collection_date: '',
     expiry_date: '',
-    blood_bank_id: '',
-    status: 'available',
-    current_location_latitude: '22.5726',
-    current_location_longitude: '88.3639'
+    status: 'available'
   });
 
   useEffect(() => {
@@ -38,16 +35,9 @@ const BloodManagement = () => {
 
   const fetchData = async () => {
     try {
-      const [unitsRes, banksRes] = await Promise.all([
-        fetch(`${API_BASE}/blood_units`),
-        fetch(`${API_BASE}/blood_banks`)
-      ]);
-      
+      const unitsRes = await fetch(`${API_BASE}/blood_units`);
       const unitsData = await unitsRes.json();
-      const banksData = await banksRes.json();
-      
       setBloodUnits(unitsData);
-      setBloodBanks(banksData);
     } catch (error) {
       console.error('Error fetching data:', error);
     }
@@ -82,10 +72,18 @@ const BloodManagement = () => {
 
   const handleAddUnit = async () => {
     try {
+      // Add hospital blood bank ID and coordinates automatically
+      const unitData = {
+        ...newUnit,
+        blood_bank_id: "04557506-0713-4634-8297-2455eb60aee9", // Use first available blood bank ID
+        current_location_latitude: 13.0827, // Chennai coordinates
+        current_location_longitude: 80.2707
+      };
+
       const response = await fetch(`${API_BASE}/blood_units`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newUnit)
+        body: JSON.stringify(unitData)
       });
 
       if (response.ok) {
@@ -95,10 +93,7 @@ const BloodManagement = () => {
           quantity_ml: '',
           collection_date: '',
           expiry_date: '',
-          blood_bank_id: '',
-          status: 'available',
-          current_location_latitude: '22.5726',
-          current_location_longitude: '88.3639'
+          status: 'available'
         });
         setIsAdding(false);
         fetchData();
@@ -178,8 +173,20 @@ const BloodManagement = () => {
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Blood Management System</h1>
-          <p className="text-gray-600">AI-powered blood inventory management with real-time monitoring</p>
+          <div className="flex items-center justify-between w-full">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Blood Management System</h1>
+              <p className="text-gray-600">AI-powered blood inventory management for our hospital blood bank</p>
+              <div className="mt-2 flex items-center space-x-2">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-sm text-green-600 font-medium">Chennai network integration for emergency support</span>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-lg font-semibold text-blue-600">SRM Global Hospitals</div>
+              <div className="text-sm text-gray-500">Chennai, Tamil Nadu</div>
+            </div>
+          </div>
         </div>
 
         {/* AI Status & Critical Alerts */}
@@ -224,10 +231,10 @@ const BloodManagement = () => {
               <Plus className="h-5 w-5 text-green-600" />
               <span>Add New Blood Unit</span>
             </CardTitle>
-            <CardDescription>Add new blood units to the system. AI will automatically analyze for matches.</CardDescription>
+            <CardDescription>Add new blood units to our hospital blood bank. Blood bank and location are automatically set for SRM Global Hospitals Chennai. AI will automatically analyze for matches.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
                 <Label htmlFor="bloodType">Blood Type *</Label>
                 <Select value={newUnit.blood_type} onValueChange={(value) => setNewUnit({...newUnit, blood_type: value})}>
@@ -254,20 +261,6 @@ const BloodManagement = () => {
               </div>
               
               <div>
-                <Label htmlFor="bloodBank">Blood Bank *</Label>
-                <Select value={newUnit.blood_bank_id} onValueChange={(value) => setNewUnit({...newUnit, blood_bank_id: value})}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select blood bank" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {bloodBanks.map(bank => (
-                      <SelectItem key={bank.id} value={bank.id}>{bank.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div>
                 <Label htmlFor="collectionDate">Collection Date *</Label>
                 <Input
                   id="collectionDate"
@@ -287,34 +280,10 @@ const BloodManagement = () => {
                 />
               </div>
               
-              <div>
-                <Label htmlFor="latitude">Latitude *</Label>
-                <Input
-                  id="latitude"
-                  type="number"
-                  step="0.000001"
-                  placeholder="e.g., 22.5726"
-                  value={newUnit.current_location_latitude}
-                  onChange={(e) => setNewUnit({...newUnit, current_location_latitude: e.target.value})}
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="longitude">Longitude *</Label>
-                <Input
-                  id="longitude"
-                  type="number"
-                  step="0.000001"
-                  placeholder="e.g., 88.3639"
-                  value={newUnit.current_location_longitude}
-                  onChange={(e) => setNewUnit({...newUnit, current_location_longitude: e.target.value})}
-                />
-              </div>
-              
-              <div className="flex items-end">
+              <div className="md:col-span-2 lg:col-span-4">
                 <Button 
                   onClick={handleAddUnit}
-                  disabled={!newUnit.blood_type || !newUnit.quantity_ml || !newUnit.blood_bank_id || !newUnit.collection_date || !newUnit.expiry_date || !newUnit.current_location_latitude || !newUnit.current_location_longitude}
+                  disabled={!newUnit.blood_type || !newUnit.quantity_ml || !newUnit.collection_date || !newUnit.expiry_date}
                   className="w-full"
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -365,7 +334,7 @@ const BloodManagement = () => {
         <Card>
           <CardHeader>
             <CardTitle>Blood Inventory ({filteredUnits.length} units)</CardTitle>
-            <CardDescription>Real-time blood unit management with AI monitoring</CardDescription>
+            <CardDescription>Our hospital blood bank inventory with AI monitoring</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -384,7 +353,6 @@ const BloodManagement = () => {
                 <tbody>
                   {filteredUnits.map((unit) => {
                     const expiryStatus = getExpiryStatus(unit.expiry_date);
-                    const bloodBank = bloodBanks.find(b => b.id === unit.blood_bank_id);
                     
                     return (
                       <tr key={unit.id} className="border-b hover:bg-gray-50">

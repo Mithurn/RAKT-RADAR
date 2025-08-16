@@ -6,10 +6,9 @@ const Navigation = () => {
   const location = useLocation();
 
   const navItems = [
-    { path: '/', label: 'Dashboard', icon: Home },
-    { path: '/blood-management', label: 'Blood Management', icon: Droplet },
-    { path: '/smart-routing', label: 'Smart Routing', icon: Route },
-    { path: '/unit-tracking', label: 'Unit Tracking', icon: MapPin },
+    { path: '/', label: 'Hospital Dashboard', icon: Home },
+    { path: '/blood-management', label: 'Our Blood Bank', icon: Droplet },
+    { path: '/smart-routing', label: 'Emergency Requests', icon: Route },
   ];
 
   return (
@@ -49,7 +48,7 @@ const Navigation = () => {
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-sm text-green-600 font-medium">AI System Active</span>
+              <span className="text-sm text-green-600 font-medium">Local Network Active</span>
             </div>
           </div>
         </div>

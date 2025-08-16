@@ -3,6 +3,7 @@ import math
 import random
 import time
 from src.models.models import BloodUnit, Hospital, BloodBank, db
+from datetime import datetime
 
 intelligence_bp = Blueprint('intelligence', __name__)
 
@@ -191,13 +192,15 @@ def get_routing(from_entity_id, to_entity_id):
 
 @intelligence_bp.route('/ai_blood_request', methods=['POST'])
 def ai_blood_request_analysis():
-    """AI analyzes a blood request and finds optimal matches with step-by-step thinking"""
+    """AI-powered blood request analysis for emergency situations"""
     try:
         data = request.get_json()
-        blood_type = data.get('blood_type')
+        
+        # Extract request details
+        blood_type = data.get('blood_type', 'O+')
         quantity_ml = data.get('quantity_ml', 450)
         urgency = data.get('urgency', 'high')
-        hospital_location = data.get('location', {'lat': 19.0760, 'lng': 72.8777})  # Default Mumbai
+        hospital_location = data.get('location', {'lat': 13.0827, 'lng': 80.2707})  # Default Chennai (Tamil Nadu)
         
         # AI Analysis Steps with realistic processing
         analysis_steps = []
@@ -220,15 +223,25 @@ def ai_blood_request_analysis():
             'progress': 25
         })
         
-        # Step 3: Finding Surplus Units
-        flagged_units = BloodUnit.query.filter(BloodUnit.is_flagged_for_expiry == True).all()
-        matching_units = [u for u in flagged_units if u.blood_type == blood_type]
+        # Step 3: Finding Surplus Units (TAMIL NADU ONLY)
+        # Get all blood units of the requested type that are available
+        available_units = BloodUnit.query.filter(
+            BloodUnit.blood_type == blood_type,
+            BloodUnit.status == 'available'
+        ).all()
+        
+        # Filter to only Tamil Nadu blood banks
+        tamil_nadu_units = []
+        for unit in available_units:
+            blood_bank = BloodBank.query.get(unit.blood_bank_id)
+            if blood_bank and blood_bank.state == 'Tamil Nadu':
+                tamil_nadu_units.append(unit)
         
         analysis_steps.append({
             'step': 3,
             'status': 'processing',
             'message': '📊 Identifying Surplus Units...',
-            'details': f'Found {len(matching_units)} {blood_type} units approaching expiry',
+            'details': f'Found {len(tamil_nadu_units)} {blood_type} units available in Tamil Nadu',
             'progress': 45
         })
         
@@ -237,7 +250,7 @@ def ai_blood_request_analysis():
             'step': 4,
             'status': 'processing',
             'message': '🗺️ Geographic Analysis...',
-            'details': 'Calculating distances and optimal transfer routes',
+            'details': 'Calculating distances and optimal transfer routes within Tamil Nadu',
             'progress': 65
         })
         
@@ -255,7 +268,7 @@ def ai_blood_request_analysis():
             'step': 6,
             'status': 'processing',
             'message': '🧠 AI Decision Making...',
-            'details': 'Finalizing optimal transfer recommendations',
+            'details': 'Finalizing optimal transfer recommendations for Tamil Nadu network',
             'progress': 95
         })
         
@@ -268,131 +281,155 @@ def ai_blood_request_analysis():
             'progress': 100
         })
         
-        # Find actual matches
+        # Find actual matches (TAMIL NADU ONLY)
         matches = []
-        for unit in matching_units:
-            # Get all potential recipients
-            hospitals = Hospital.query.all()
-            blood_banks = BloodBank.query.all()
-            all_entities = hospitals + blood_banks
-            
-            for entity in all_entities:
-                distance = calculate_distance(
-                    unit.current_location_latitude,
-                    unit.current_location_longitude,
-                    entity.latitude,
-                    entity.longitude
-                )
+        for unit in tamil_nadu_units:
+            # Get the blood bank details
+            blood_bank = BloodBank.query.get(unit.blood_bank_id)
+            if not blood_bank:
+                continue
                 
+            # Calculate distance from hospital to blood bank
+            distance = calculate_distance(
+                hospital_location['lat'],
+                hospital_location['lng'],
+                blood_bank.latitude,
+                blood_bank.longitude
+            )
+            
+            # Only include matches within Tamil Nadu (max 500km)
+            if distance < 500:
                 # AI scoring algorithm
                 demand_score = random.randint(6, 10)  # Higher scores for better matches
                 urgency_multiplier = {'low': 1, 'medium': 1.5, 'high': 2, 'critical': 3}[urgency]
-                distance_score = max(0, 10 - (distance / 100))  # Closer = higher score
+                distance_score = max(0, 10 - (distance / 50))  # Closer = higher score
                 
                 final_score = (demand_score * urgency_multiplier + distance_score) / 2
+                ai_score = min(99, int(final_score * 10))  # Convert to percentage
                 
-                if distance < 500 and final_score > 5:
-                    # Calculate smart routing information
-                    estimated_time_minutes = round(distance * 1.2, 0)  # Mock time with traffic
-                    estimated_time_hours = round(distance / 50, 1)  # Assuming 50 km/h average with traffic
-                    route_quality = random.choice(['excellent', 'good', 'fair'])
-                    traffic_status = random.choice(['light', 'moderate', 'heavy'])
-                    fuel_cost_estimate = round(distance * 8, 2)  # Mock fuel cost in INR
-                    toll_estimate = round(distance * 2, 2) if distance > 50 else 0  # Mock toll cost
-                    
-                    # Generate waypoints for routing
-                    waypoints = []
-                    if distance > 100:
-                        # Add intermediate cities for longer routes
-                        intermediate_cities = [
-                            {'city': 'Mumbai', 'state': 'Maharashtra'},
-                            {'city': 'Pune', 'state': 'Maharashtra'},
-                            {'city': 'Nagpur', 'state': 'Maharashtra'},
-                            {'city': 'Aurangabad', 'state': 'Maharashtra'},
-                            {'city': 'Nashik', 'state': 'Maharashtra'}
-                        ]
-                        # Select relevant intermediate cities based on distance
-                        if distance > 200:
-                            waypoints = intermediate_cities[:2]
-                        elif distance > 150:
-                            waypoints = intermediate_cities[:1]
-                    
-                    match = {
-                        'blood_unit_id': unit.id,
-                        'blood_type': unit.blood_type,
-                        'quantity_ml': unit.quantity_ml,
-                        'days_until_expiry': unit.days_until_expiry(),
-                        'entity_id': entity.id,
-                        'entity_name': entity.name,
-                        'entity_type': 'hospital' if isinstance(entity, Hospital) else 'blood_bank',
-                        'city': entity.city,
-                        'state': entity.state,
-                        'distance_km': round(distance, 2),
-                        'demand_score': demand_score,
-                        'urgency': urgency,
-                        'ai_score': round(final_score, 2),
-                        'estimated_time_hours': estimated_time_hours,
-                        'compatibility_score': random.randint(85, 98),
-                        'transfer_priority': 'High' if final_score > 7 else 'Medium',
-                        # Smart Routing Information
-                        'smart_routing': {
-                            'estimated_time_minutes': estimated_time_minutes,
-                            'route_quality': route_quality,
-                            'traffic_status': traffic_status,
-                            'fuel_cost_estimate': fuel_cost_estimate,
-                            'toll_estimate': toll_estimate,
-                            'waypoints': waypoints,
-                            'recommended_departure_time': 'Immediate',
-                            'route_optimization': 'AI-optimized for speed and cost',
-                            'alternative_routes': random.randint(1, 3),
-                            'safety_score': random.randint(85, 95)
-                        }
-                    }
-                    matches.append(match)
+                # Calculate smart routing information
+                estimated_time_hours = round(distance / 50, 1)  # Assuming 50 km/h average with traffic
+                route_quality = random.randint(85, 98)  # High quality for Tamil Nadu routes
+                safety_score = random.randint(88, 95)  # High safety for local routes
+                
+                match = {
+                    'id': unit.id,
+                    'blood_type': unit.blood_type,
+                    'quantity_ml': unit.quantity_ml,
+                    'source_name': blood_bank.name,
+                    'source_city': blood_bank.city,
+                    'source_state': blood_bank.state,
+                    'distance_km': round(distance, 2),
+                    'estimated_time_hours': estimated_time_hours,
+                    'route_quality': route_quality,
+                    'safety_score': safety_score,
+                    'ai_score': ai_score,
+                    'urgency_level': urgency,
+                    'days_until_expiry': unit.days_until_expiry(),
+                    'collection_date': unit.collection_date.isoformat() if unit.collection_date else None,
+                    'expiry_date': unit.expiry_date.isoformat() if unit.expiry_date else None
+                }
+                matches.append(match)
         
-        # Sort by AI score
+        # Sort matches by AI score (highest first)
         matches.sort(key=lambda x: x['ai_score'], reverse=True)
         
-        # AI Analysis Summary
-        ai_summary = {
-            'request_analyzed': {
-                'blood_type': blood_type,
-                'quantity_ml': quantity_ml,
-                'urgency': urgency,
-                'location': hospital_location
-            },
-            'analysis_results': {
-                'total_units_scanned': BloodUnit.query.count(),
-                'matching_blood_type_found': len(matching_units),
-                'optimal_matches_identified': len(matches[:5]),
-                'analysis_time_seconds': random.uniform(2.5, 4.0),
-                'ai_confidence_score': random.uniform(85, 95)
-            },
-            'recommendations': {
-                'top_priority_match': matches[0] if matches else None,
-                'alternative_options': matches[1:4] if len(matches) > 1 else [],
-                'waste_prevention_potential': f"Prevents {len(matching_units)} units from expiring",
-                'estimated_lives_saved': random.randint(2, 8)
-            },
-            'smart_routing_insights': {
-                'total_routes_analyzed': len(matches),
-                'fastest_route_minutes': min([m['smart_routing']['estimated_time_minutes'] for m in matches]) if matches else 0,
-                'most_cost_effective_route': min(matches, key=lambda x: x['smart_routing']['fuel_cost_estimate']) if matches else None,
-                'route_optimization_score': random.randint(88, 96),
-                'traffic_conditions': 'Mixed - AI recommends optimal departure times',
-                'safety_recommendations': 'All routes verified for medical transport safety'
-            }
-        }
+        # Limit to top 5 matches
+        matches = matches[:5]
         
         return jsonify({
-            'analysis_steps': analysis_steps,
-            'ai_summary': ai_summary,
-            'matches': matches[:10],
             'status': 'success',
-            'message': 'AI analysis completed successfully'
+            'message': 'AI analysis completed successfully',
+            'analysis_steps': analysis_steps,
+            'matches': matches,
+            'summary': {
+                'total_units_found': len(tamil_nadu_units),
+                'matches_identified': len(matches),
+                'region': 'Tamil Nadu',
+                'urgency_level': urgency,
+                'blood_type_requested': blood_type,
+                'quantity_requested': quantity_ml
+            }
         }), 200
         
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@intelligence_bp.route('/order_blood', methods=['POST'])
+def order_blood():
+    """Place an order for blood transfer"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['blood_unit_id', 'urgency', 'quantity_ml']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+        
+        # Get the blood unit
+        blood_unit = BloodUnit.query.get(data['blood_unit_id'])
+        if not blood_unit:
+            return jsonify({'error': 'Blood unit not found'}), 404
+        
+        # Find SRM Global Hospital (or create if doesn't exist)
+        srm_hospital = Hospital.query.filter(
+            Hospital.name.like('%SRM%Global%')
+        ).first()
+        
+        if not srm_hospital:
+            # Create SRM Global Hospital if it doesn't exist
+            srm_hospital = Hospital(
+                name="SRM Global Hospitals",
+                address="SRM Nagar, Kattankulathur, Chengalpattu District",
+                city="Chennai",
+                state="Tamil Nadu",
+                latitude=12.8231,
+                longitude=80.0449,
+                contact_person="Dr. SRM Director",
+                contact_email="director@srmglobalhospitals.com",
+                contact_phone="+91-44-27452222"
+            )
+            db.session.add(srm_hospital)
+            db.session.flush()  # Get the ID
+        
+        # Create transfer record
+        from src.models.models import Transfer
+        transfer = Transfer(
+            blood_unit_id=blood_unit.id,
+            from_entity_id=blood_unit.blood_bank_id,
+            to_entity_id=srm_hospital.id,
+            transfer_date=datetime.now(),
+            status='pending',
+            notes=f"Emergency order for {data['quantity_ml']}ml {blood_unit.blood_type} blood. Urgency: {data['urgency']}"
+        )
+        
+        # Update blood unit status
+        blood_unit.status = 'transferred'
+        
+        # Save to database
+        db.session.add(transfer)
+        db.session.commit()
+        
+        # Return transfer details for tracking
+        delivery_time = round(calculate_distance(
+            blood_unit.current_location_latitude,
+            blood_unit.current_location_longitude,
+            srm_hospital.latitude,
+            srm_hospital.longitude
+        ) / 50, 1)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Blood order placed successfully',
+            'transfer_id': transfer.id,
+            'blood_unit': blood_unit.to_dict(),
+            'destination': srm_hospital.to_dict(),
+            'estimated_delivery_time': f"{delivery_time} hours"
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
 @intelligence_bp.route('/analytics/dashboard', methods=['GET'])

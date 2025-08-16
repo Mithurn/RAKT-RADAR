@@ -3,7 +3,6 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Dashboard from './components/Dashboard';
 import BloodManagement from './components/BloodManagement';
 import SmartRouting from './components/SmartRouting';
-import UnitTracking from './components/UnitTracking';
 import Navigation from './components/Navigation';
 import './App.css';
 
@@ -16,7 +15,6 @@ function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/blood-management" element={<BloodManagement />} />
           <Route path="/smart-routing" element={<SmartRouting />} />
-          <Route path="/unit-tracking" element={<UnitTracking />} />
         </Routes>
       </div>
     </Router>
