@@ -19,7 +19,7 @@
 3. **Smart Routing** (`/smart-routing`) - AI matching and transfer routes
 
 ### **Backend (Flask API):**
-- **Port**: 8000 (avoiding AirTunes conflict)
+- **Port**: 8000 
 - **Database**: SQLite with real-time updates
 - **AI Algorithms**: Expiry prediction, demand matching, route optimization
 
