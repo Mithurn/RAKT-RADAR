@@ -29,8 +29,9 @@ const BloodManagement = () => {
   useEffect(() => {
     fetchData();
     // Real-time AI monitoring - check for matches every 30 seconds
-    const interval = setInterval(checkForMatches, 30000);
-    return () => clearInterval(interval);
+    // DISABLED: Automatic alerts to prevent unwanted popups
+    // const interval = setInterval(checkForMatches, 30000);
+    // return () => clearInterval(interval);
   }, []);
 
   const fetchData = async () => {
@@ -50,11 +51,12 @@ const BloodManagement = () => {
       const matches = data.matches || [];
       setAiMatches(matches);
       
+      // DISABLED: Automatic critical alerts to prevent unwanted popups
       // Check for critical matches and show alerts
-      const criticalMatches = matches.filter(match => match.urgency === 'critical');
-      if (criticalMatches.length > 0) {
-        showCriticalAlert(criticalMatches);
-      }
+      // const criticalMatches = matches.filter(match => match.urgency === 'critical');
+      // if (criticalMatches.length > 0) {
+      //   showCriticalAlert(criticalMatches);
+      // }
     } catch (error) {
       console.error('Error checking matches:', error);
     }
@@ -72,10 +74,29 @@ const BloodManagement = () => {
 
   const handleAddUnit = async () => {
     try {
+      // Get a valid blood bank ID dynamically
+      let bloodBankId = newUnit.blood_bank_id;
+      
+      if (!bloodBankId) {
+        // If no blood bank ID is set, get the first available one
+        const bloodBanksResponse = await fetch(`${API_BASE}/blood_banks`);
+        if (bloodBanksResponse.ok) {
+          const bloodBanksData = await bloodBanksResponse.json();
+          if (bloodBanksData.length > 0) {
+            bloodBankId = bloodBanksData[0].id;
+          }
+        }
+      }
+      
+      if (!bloodBankId) {
+        alert('❌ No blood bank available. Please try again.');
+        return;
+      }
+
       // Add hospital blood bank ID and coordinates automatically
       const unitData = {
         ...newUnit,
-        blood_bank_id: "04557506-0713-4634-8297-2455eb60aee9", // Use first available blood bank ID
+        blood_bank_id: bloodBankId,
         current_location_latitude: 13.0827, // Chennai coordinates
         current_location_longitude: 80.2707
       };
@@ -100,6 +121,9 @@ const BloodManagement = () => {
         
         // Trigger AI analysis immediately
         setTimeout(checkForMatches, 2000);
+      } else {
+        const errorData = await response.json();
+        alert(`❌ Error adding blood unit: ${errorData.error || 'Unknown error'}`);
       }
     } catch (error) {
       alert('❌ Error adding blood unit');

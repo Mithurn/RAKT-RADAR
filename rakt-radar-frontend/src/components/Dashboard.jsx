@@ -30,8 +30,15 @@ const Dashboard = () => {
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [liveCounter, setLiveCounter] = useState(0);
   
+  // Live counter timer effect
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setLiveCounter(prev => prev + 1);
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, []);
 
-  
   useEffect(() => {
     fetchData();
   }, []); // Only run once on mount
@@ -137,10 +144,10 @@ const Dashboard = () => {
                 <div className="flex items-start justify-between w-full">
                   <div className="flex-1">
                     <h1 className="text-3xl font-bold text-gray-900">RAKT-RADAR</h1>
-                    <p className="text-gray-600">Blood Management & Emergency Response System</p>
+                    <p className="text-gray-600">SRM Global Hospitals Blood Management Network</p>
                     <div className="mt-1 flex items-center space-x-2">
                       <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                      <span className="text-xs text-green-600 font-medium">Chennai network integration for emergency support</span>
+                      <span className="text-xs text-green-600 font-medium">Tamil Nadu Regional Network • Emergency Response System</span>
                     </div>
                   </div>
                   <div className="text-right ml-auto">
@@ -183,7 +190,7 @@ const Dashboard = () => {
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-sm font-medium text-green-700">Local Network Online</span>
+                <span className="text-sm font-medium text-green-700">Tamil Nadu Network Online</span>
               </div>
               <div className="flex items-center space-x-2">
                 <Clock className="h-4 w-4 text-gray-500" />
@@ -224,9 +231,9 @@ const Dashboard = () => {
               color="yellow"
             />
             <StatCard
-              title="Chennai Network"
+              title="Tamil Nadu Network"
               value={analytics.network_summary.coverage_cities}
-              description="Blood banks in Chennai"
+              description="Blood banks in Tamil Nadu"
               icon={MapPin}
               color="blue"
             />

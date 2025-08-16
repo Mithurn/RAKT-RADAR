@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Droplet, Route, Activity, MapPin } from 'lucide-react';
+import { Home, Droplet, Route, Activity, MapPin, Truck } from 'lucide-react';
 
 const Navigation = () => {
   const location = useLocation();
@@ -9,6 +9,7 @@ const Navigation = () => {
     { path: '/', label: 'Hospital Dashboard', icon: Home },
     { path: '/blood-management', label: 'Our Blood Bank', icon: Droplet },
     { path: '/smart-routing', label: 'Emergency Requests', icon: Route },
+    { path: '/tracking', label: 'Live Tracking', icon: Truck },
   ];
 
   return (
@@ -48,7 +49,7 @@ const Navigation = () => {
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-sm text-green-600 font-medium">Local Network Active</span>
+              <span className="text-sm text-green-600 font-medium">Tamil Nadu Network Active</span>
             </div>
           </div>
         </div>

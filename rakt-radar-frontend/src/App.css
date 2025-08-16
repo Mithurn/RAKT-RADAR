@@ -118,3 +118,128 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Leaflet Map Styles */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  border-radius: 0.5rem;
+}
+
+.leaflet-popup-content {
+  margin: 8px 12px;
+  font-family: inherit;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Custom Marker Styles */
+.custom-hospital-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+.custom-vehicle-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Map Container Responsive */
+.map-container {
+  height: 24rem;
+  width: 100%;
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+/* Tracking Page Map Styles */
+.tracking-map-container {
+  height: 500px !important;
+  width: 100% !important;
+  min-height: 500px !important;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+  background-color: #f8fafc;
+}
+
+.tracking-map-container .leaflet-container {
+  height: 100% !important;
+  width: 100% !important;
+  min-height: 500px !important;
+  z-index: 1;
+  background-color: #f8fafc;
+}
+
+.tracking-map-container .leaflet-pane {
+  z-index: 1;
+}
+
+.tracking-map-container .leaflet-control {
+  z-index: 1000;
+}
+
+/* Google Maps Styles */
+.google-maps-container {
+  height: 500px !important;
+  width: 100% !important;
+  min-height: 500px !important;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+
+.google-maps-container .gm-style {
+  border-radius: 0.5rem;
+}
+
+/* Ensure map tiles load properly */
+.leaflet-tile {
+  border: none !important;
+}
+
+.leaflet-tile-container {
+  z-index: 1 !important;
+}
+
+/* Status Timeline Styles */
+.status-timeline {
+  position: relative;
+}
+
+.status-timeline::before {
+  content: '';
+  position: absolute;
+  left: 16px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background-color: #e5e7eb;
+  z-index: 0;
+}
+
+/* Progress Bar Animation */
+.progress-bar {
+  transition: width 1s ease-in-out;
+}
+
+/* Vehicle Animation */
+@keyframes vehicle-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+}
+
+.animate-vehicle {
+  animation: vehicle-pulse 2s ease-in-out infinite;
+}

@@ -117,107 +117,124 @@ const SmartRouting = () => {
 
   // Separate useEffect for emergency alert monitoring
   useEffect(() => {
+    // DISABLED: Automatic emergency alerts to prevent unwanted popups
     // Only set up interval if we have matches and haven't already set it up
-    if (matches.length > 0 && !processedMatchesRef.current.has('interval-setup')) {
-      processedMatchesRef.current.add('interval-setup');
+    // if (matches.length > 0 && !processedMatchesRef.current.has('interval-setup')) {
+    //   processedMatchesRef.current.add('interval-setup');
       
-      const interval = setInterval(() => {
-        // Check if there are any critical matches that haven't been alerted
-        const criticalMatches = matches.filter(match => {
-          const matchKey = `${match.entity_name}-${match.blood_type}-${match.distance_km}`;
-          return match.urgency === 'critical' && 
-                 !processedMatchesRef.current.has(matchKey);
-        });
+    //   const interval = setInterval(() => {
+    //     // Check if there are any critical matches that haven't been alerted
+    //     const criticalMatches = matches.filter(match => {
+    //       const matchKey = `${match.entity_name}-${match.blood_type}-${match.distance_km}`;
+    //       return match.urgency === 'critical' && 
+    //              !processedMatchesRef.current.has(matchKey);
+    //     });
         
-        // Only process if there are new critical matches
-        if (criticalMatches.length > 0) {
-          criticalMatches.forEach(match => {
-            const matchKey = `${match.entity_name}-${match.blood_type}-${match.distance_km}`;
-            // Mark this match as processed
-            processedMatchesRef.current.add(matchKey);
+    //     // Only process if there are new critical matches
+    //     if (criticalMatches.length > 0) {
+    //       criticalMatches.forEach(match => {
+    //         const matchKey = `${match.entity_name}-${match.blood_type}-${match.distance_km}`;
+    //         // Mark this match as processed
+    //         processedMatchesRef.current.add(matchKey);
             
-            // Create realistic SRM Global Hospitals emergency scenarios
-            const emergencyScenarios = [
-              {
-                hospital: "SRM Global Hospitals",
-                city: "Chennai",
-                scenario: "Trauma Center - Multiple accident victims"
-              },
-              {
-                hospital: "SRM Global Hospitals", 
-                city: "Chennai",
-                scenario: "Emergency Surgery - Critical patient"
-              },
-              {
-                hospital: "SRM Global Hospitals",
-                city: "Chennai", 
-                scenario: "ICU - Severe blood loss"
-              },
-              {
-                hospital: "SRM Global Hospitals",
-                city: "Chennai",
-                scenario: "Cardiac Emergency - Blood transfusion needed"
-              },
-              {
-                hospital: "SRM Global Hospitals",
-                city: "Chennai",
-                scenario: "Emergency Department - Trauma case"
-              },
-              {
-                hospital: "SRM Global Hospitals",
-                city: "Chennai",
-                scenario: "Emergency Surgery - Trauma case"
-              },
-              {
-                hospital: "Chettinad Hospital",
-                city: "Chennai",
-                scenario: "ICU - Critical care blood requirement"
-              },
-              {
-                hospital: "MIOT International",
-                city: "Chennai",
-                scenario: "Emergency Department - Accident victims"
-              },
-              {
-                hospital: "Coimbatore Medical College Hospital",
-                city: "Coimbatore",
-                scenario: "Emergency Department - Critical trauma case"
-              },
-              {
-                hospital: "Madurai Medical College Hospital",
-                city: "Madurai",
-                scenario: "ICU - Severe blood loss emergency"
-              },
-              {
-                hospital: "Salem Government Hospital",
-                city: "Salem",
-                scenario: "Emergency Surgery - Blood transfusion needed"
-              },
-              {
-                hospital: "Vellore Medical Center",
-                city: "Vellore",
-                scenario: "Trauma Center - Multiple victims"
-              }
-            ];
+    //         // Create realistic SRM Global Hospitals emergency scenarios
+    //         const emergencyScenarios = [
+    //           {
+    //             hospital: "SRM Global Hospitals",
+    //             city: "Chennai",
+    //             scenario: "Trauma Center - Multiple accident victims"
+    //           },
+    //           {
+    //             hospital: "SRM Global Hospitals", 
+    //             city: "Chennai",
+    //             scenario: "Emergency Surgery - Critical patient"
+    //           },
+    //           {
+    //             hospital: "SRM Global Hospitals",
+    //             city: "Chennai", 
+    //             scenario: "ICU - Severe blood loss"
+    //           },
+    //           {
+    //             hospital: "SRM Global Hospitals",
+    //             city: "Chennai",
+    //             scenario: "Cardiac Emergency - Blood transfusion needed"
+    //           },
+    //           {
+    //             hospital: "SRM Global Hospitals",
+    //             city: "Chennai",
+    //             scenario: "Emergency Department - Trauma case"
+    //           },
+    //           {
+    //             hospital: "SRM Global Hospitals",
+    //             city: "Chennai",
+    //             scenario: "Emergency Surgery - Trauma case"
+    //           },
+    //           {
+    //             hospital: "Chettinad Hospital",
+    //             city: "Chennai",
+    //             scenario: "ICU - Critical care blood requirement"
+    //           },
+    //           {
+    //             hospital: "MIOT International",
+    //             city: "Chennai",
+    //             scenario: "Emergency Department - Accident victims"
+    //           },
+    //           {
+    //             hospital: "Coimbatore Medical College Hospital",
+    //             city: "Coimbatore",
+    //             scenario: "Emergency Department - Critical trauma case"
+    //           },
+    //           {
+    //             hospital: "Madurai Medical College Hospital",
+    //             city: "Madurai",
+    //             scenario: "ICU - Severe blood loss emergency"
+    //           },
+    //           {
+    //             hospital: "Salem Government Hospital",
+    //             city: "Salem",
+    //             scenario: "Emergency Surgery - Blood transfusion needed"
+    //           },
+    //           {
+    //             hospital: "Vellore Medical Center",
+    //             city: "Vellore",
+    //             scenario: "Trauma Center - Multiple victims"
+    //           }
+    //         ];
             
-            // Pick a random emergency scenario
-            const scenario = emergencyScenarios[Math.floor(Math.random() * emergencyScenarios.length)];
+    //         // Pick a random emergency scenario
+    //         const scenario = emergencyScenarios[Math.floor(Math.random() * emergencyScenarios.length)];
             
-            triggerEmergencyAlert({
-              type: 'hospital_emergency',
-              urgency: 'critical',
-              blood_type: match.blood_type,
-              hospital: scenario.hospital,
-              city: scenario.city,
-              distance: Math.round((Math.random() * 15 + 3) * 100) / 100, // Random distance 3-18km for Tamil Nadu
-              message: `CRITICAL: ${match.blood_type} blood needed at ${scenario.scenario}`
-            });
-          });
-        }
-      }, 30000); // Check every 30 seconds instead of 10
+    //         // Calculate realistic distance based on hospital location
+    //         let realisticDistance;
+    //         if (scenario.city === "Chennai") {
+    //           realisticDistance = Math.round((Math.random() * 25 + 5) * 100) / 100; // 5-30km for Chennai
+    //         } else if (scenario.city === "Coimbatore") {
+    //           realisticDistance = Math.round((Math.random() * 50 + 200) * 100) / 100; // 200-250km for Coimbatore
+    //         } else if (scenario.city === "Madurai") {
+    //           realisticDistance = Math.round((Math.random() * 50 + 300) * 100) / 100; // 300-350km for Madurai
+    //         } else if (scenario.city === "Salem") {
+    //           realisticDistance = Math.round((Math.random() * 50 + 150) * 100) / 100; // 150-200km for Salem
+    //         } else if (scenario.city === "Vellore") {
+    //           realisticDistance = Math.round((Math.random() * 50 + 100) * 100) / 100; // 100-150km for Vellore
+    //         } else {
+    //           realisticDistance = Math.round((Math.random() * 15 + 3) * 100) / 100; // Default 3-18km
+    //         }
+            
+    //         triggerEmergencyAlert({
+    //           type: 'hospital_emergency',
+    //           urgency: 'critical',
+    //           blood_type: match.blood_type,
+    //           hospital: scenario.hospital,
+    //           city: scenario.city,
+    //           distance: realisticDistance,
+    //           message: `CRITICAL: ${match.blood_type} blood needed at ${scenario.scenario}`
+    //         });
+    //       });
+    //     }
+    //   }, 30000); // Check every 30 seconds instead of 10
       
-      return () => clearInterval(interval);
-    }
+    //   return () => clearInterval(interval);
+    // }
   }, [matches]); // Only run when matches change
 
   const fetchData = async () => {
@@ -370,7 +387,20 @@ const SmartRouting = () => {
           return distanceA - distanceB; // Sort by shortest distance first
         });
 
-        const bestMatch = sortedUnits[0];
+        // Ensure diversity by limiting similar blood banks
+        const diverseUnits = [];
+        const seenBloodBanks = new Set();
+        
+        for (const unit of sortedUnits) {
+          const sourceBank = bloodBanks.find(b => b.id === unit.blood_bank_id);
+          if (sourceBank && !seenBloodBanks.has(sourceBank.name)) {
+            diverseUnits.push(unit);
+            seenBloodBanks.add(sourceBank.name);
+          }
+          if (diverseUnits.length >= 3) break; // Limit to 3 diverse matches
+        }
+
+        const bestMatch = diverseUnits[0];
         const sourceBank = bloodBanks.find(b => b.id === bestMatch.blood_bank_id);
         const route = calculateOptimalRoute(sourceBank, destinationHospital);
         
@@ -378,13 +408,13 @@ const SmartRouting = () => {
         console.log('Source bank:', sourceBank);
         console.log('Route calculated:', route);
           
-        // Create AI results for demo
+        // Create AI results for demo with diverse blood banks
         const demoResults = {
           ai_summary: {
             analysis_results: {
               total_units_scanned: bloodUnits.length,
               ai_confidence_score: 95.8,
-              optimal_matches_identified: availableUnits.length
+              optimal_matches_identified: diverseUnits.length
             },
             recommendations: {
               waste_prevention_potential: 'High efficiency route identified',
@@ -397,8 +427,13 @@ const SmartRouting = () => {
               safety_recommendations: 'Safe route with minimal traffic'
             }
           },
-          matches: sortedUnits.map(unit => {
+          matches: diverseUnits.map((unit, index) => {
             const sourceBank = bloodBanks.find(b => b.id === unit.blood_bank_id);
+            const unitRoute = calculateOptimalRoute(sourceBank, destinationHospital);
+            
+            // Ensure realistic distances - minimum 5km for demo believability
+            const realisticDistance = Math.max(unitRoute.distance, 5 + (index * 3));
+            
             return {
               blood_unit_id: unit.id,
               blood_type: unit.blood_type,
@@ -406,8 +441,8 @@ const SmartRouting = () => {
               entity_name: destinationHospital.name,
               source_blood_bank: sourceBank ? sourceBank.name : 'AI-Selected Blood Bank',
               source_location: sourceBank ? `${sourceBank.city}, ${sourceBank.state}` : 'Location details available',
-              distance_km: route.distance,
-              estimated_time_hours: route.estimatedHours,
+              distance_km: Math.round(realisticDistance * 100) / 100,
+              estimated_time_hours: Math.ceil(realisticDistance / 60),
               ai_score: Math.floor(Math.random() * 20) + 80,
               compatibility_score: 100,
               coordinates: {
@@ -416,10 +451,10 @@ const SmartRouting = () => {
                 current: [13.0447, 80.2456]
               },
               smart_routing: {
-                estimated_time_minutes: Math.floor(route.distance * 0.8),
-                route_quality: 'excellent',
-                traffic_status: 'clear',
-                fuel_cost_estimate: Math.floor(route.distance * 0.5),
+                estimated_time_minutes: Math.floor(realisticDistance * 0.8),
+                route_quality: index === 0 ? 'excellent' : index === 1 ? 'good' : 'fair',
+                traffic_status: index === 0 ? 'clear' : index === 1 ? 'moderate' : 'light',
+                fuel_cost_estimate: Math.floor(realisticDistance * 0.5),
                 recommended_departure_time: new Date(Date.now() + 30 * 60000).toLocaleTimeString()
               }
             };
@@ -427,7 +462,7 @@ const SmartRouting = () => {
         };
 
         setAiResults(demoResults);
-        addLiveUpdate(`✅ AI found ${sortedUnits.length} optimal match(es)!`, 'success');
+        addLiveUpdate(`✅ AI found ${diverseUnits.length} optimal match(es)!`, 'success');
         
         setSelectedMatch({
           ...bestMatch,
@@ -494,9 +529,9 @@ const SmartRouting = () => {
               blood_type: emergencyRequest.blood_type,
               quantity_ml: 500,
               entity_name: 'Fortis Malar Hospital',
-              source_blood_bank: 'Chennai Central Blood Bank',
+              source_blood_bank: 'Red Cross Blood Bank Chennai',
               source_location: 'Chennai, Tamil Nadu',
-              distance_km: mockRoute.distance + 5,
+              distance_km: mockRoute.distance + 8,
               estimated_time_hours: mockRoute.estimatedHours + 1,
               ai_score: 88,
               compatibility_score: 100,
@@ -506,10 +541,10 @@ const SmartRouting = () => {
                 current: [13.0447, 80.2456]
               },
               smart_routing: {
-                estimated_time_minutes: Math.floor((mockRoute.distance + 5) * 0.8),
+                estimated_time_minutes: Math.floor((mockRoute.distance + 8) * 0.8),
                 route_quality: 'good',
                 traffic_status: 'moderate',
-                fuel_cost_estimate: Math.floor((mockRoute.distance + 5) * 0.5),
+                fuel_cost_estimate: Math.floor((mockRoute.distance + 8) * 0.5),
                 recommended_departure_time: new Date(Date.now() + 60 * 60000).toLocaleTimeString()
               }
             }
@@ -549,7 +584,41 @@ const SmartRouting = () => {
               Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
               Math.sin(dLon/2) * Math.sin(dLon/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    const distance = R * c;
+    let distance = R * c;
+    
+    // Ensure minimum realistic distance for demo believability
+    if (distance < 5) {
+      distance = 5 + Math.random() * 10; // Minimum 5km, up to 15km
+    }
+    
+    // Calculate estimated travel time (assuming 60 km/h average for Tamil Nadu roads)
+    const estimatedHours = Math.ceil(distance / 60);
+    
+    return {
+      distance: Math.round(distance * 100) / 100,
+      estimatedHours,
+      coordinates: [
+        [lon1, lat1],
+        [lon2, lat2]
+      ]
+    };
+  };
+
+  const calculateRoute = (lat1, lon1, lat2, lon2) => {
+    // Calculate distance using Haversine formula
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    let distance = R * c;
+    
+    // Ensure minimum realistic distance for demo believability
+    if (distance < 5) {
+      distance = 5 + Math.random() * 10; // Minimum 5km, up to 15km
+    }
     
     // Calculate estimated travel time (assuming 60 km/h average for Tamil Nadu roads)
     const estimatedHours = Math.ceil(distance / 60);
@@ -698,7 +767,23 @@ const SmartRouting = () => {
         return distanceA - distanceB; // Sort by shortest distance first
       });
       
-      const bloodUnit = sortedUnits[0];
+      // Ensure diversity by selecting different blood banks
+      let bloodUnit = null;
+      const seenBloodBanks = new Set();
+      
+      for (const unit of sortedUnits) {
+        const sourceBank = bloodBanks.find(bank => bank.id === unit.blood_bank_id);
+        if (sourceBank && !seenBloodBanks.has(sourceBank.name)) {
+          bloodUnit = unit;
+          seenBloodBanks.add(sourceBank.name);
+          break;
+        }
+      }
+      
+      // If no diverse blood bank found, use the first one
+      if (!bloodUnit && sortedUnits.length > 0) {
+        bloodUnit = sortedUnits[0];
+      }
 
       if (!bloodUnit) {
         addLiveUpdate('❌ No available blood unit found for transfer', 'error');
@@ -1165,8 +1250,31 @@ const SmartRouting = () => {
                                         onClick={() => {
                                           // Store transfer data in localStorage for future use
                                           localStorage.setItem('currentTransfer', JSON.stringify(match));
-                                          // For now, just show a success message
-                                          addLiveUpdate(`✅ Transfer initiated for ${match.blood_type} blood from ${match.entity_name}`, 'success');
+                                          // Navigate to tracking page with transfer data
+                                          navigate('/tracking', {
+                                            state: {
+                                              transferData: {
+                                                ...match,
+                                                cost: Math.floor(match.distance_km * 55), // Slightly higher cost for drone delivery
+                                                status: 'dispatched',
+                                                delivery_method: 'drone', // Indicate this is drone delivery
+                                                estimated_time_hours: Math.max(0.25, match.distance_km / 60), // Drone is 4x faster
+                                                coordinates: {
+                                                  source: match.coordinates?.source || [13.0827, 80.2707], // Chennai Central Blood Bank coordinates
+                                                  destination: match.coordinates?.destination || [13.0067, 80.2206], // Chennai coordinates
+                                                  current: match.coordinates?.current || [13.0447, 80.2456] // Midpoint for drone start
+                                                },
+                                                drone_specs: {
+                                                  model: 'RAKT-DRONE-X1',
+                                                  max_payload: '500ml',
+                                                  max_range: '100km',
+                                                  max_speed: '60km/h',
+                                                  battery_capacity: '85%',
+                                                  weather_resistance: 'IP65'
+                                                }
+                                              }
+                                            } 
+                                          });
                                         }}
                                         disabled={isProcessing}
                                         className="bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 text-white"

@@ -93,10 +93,14 @@ def get_demand_matching():
             
             all_matches = []
             for unit in flagged_units:
-                # Get a few top matches for each flagged unit
-                hospitals = Hospital.query.limit(3).all()
-                blood_banks = BloodBank.query.limit(2).all()
+                # Get diverse matches - don't always return the same entities
+                hospitals = Hospital.query.limit(5).all()
+                blood_banks = BloodBank.query.limit(5).all()
                 entities = hospitals + blood_banks
+                
+                # Shuffle entities to get different results each time
+                import random
+                random.shuffle(entities)
                 
                 for entity in entities:
                     distance = calculate_distance(
@@ -107,6 +111,13 @@ def get_demand_matching():
                     )
                     
                     if distance < 300:  # Closer matches for overview
+                        # Ensure we don't always show the same blood bank
+                        if len(all_matches) > 0:
+                            # Check if we already have a match from this entity
+                            existing_entity = any(m['entity_name'] == entity.name for m in all_matches)
+                            if existing_entity and len(all_matches) < 10:
+                                continue  # Skip if we already have this entity and want diversity
+                        
                         match = {
                             'blood_unit_id': unit.id,
                             'blood_type': unit.blood_type,
@@ -120,8 +131,29 @@ def get_demand_matching():
                             'demand_score': random.randint(5, 10)
                         }
                         all_matches.append(match)
+                        
+                        # Limit total matches to ensure diversity
+                        if len(all_matches) >= 15:
+                            break
+                
+                # Limit matches per unit to ensure diversity
+                if len(all_matches) >= 15:
+                    break
             
-            return jsonify({'matches': all_matches[:20]}), 200  # Return top 20 overall matches
+            # Ensure we have diverse results by limiting similar entities
+            diverse_matches = []
+            seen_entities = set()
+            
+            for match in all_matches:
+                entity_key = f"{match['entity_name']}-{match['blood_type']}"
+                if entity_key not in seen_entities:
+                    diverse_matches.append(match)
+                    seen_entities.add(entity_key)
+                
+                if len(diverse_matches) >= 10:
+                    break
+            
+            return jsonify({'matches': diverse_matches}), 200  # Return diverse matches
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -334,17 +366,34 @@ def ai_blood_request_analysis():
         # Sort matches by AI score (highest first)
         matches.sort(key=lambda x: x['ai_score'], reverse=True)
         
-        # Limit to top 5 matches
-        matches = matches[:5]
+        # Ensure diversity by limiting similar blood banks
+        diverse_matches = []
+        seen_blood_banks = set()
+        
+        for match in matches:
+            if match['source_name'] not in seen_blood_banks:
+                diverse_matches.append(match)
+                seen_blood_banks.add(match['source_name'])
+            
+            if len(diverse_matches) >= 5:
+                break
+        
+        # If we don't have enough diverse matches, add some from the original list
+        if len(diverse_matches) < 3:
+            for match in matches:
+                if match not in diverse_matches:
+                    diverse_matches.append(match)
+                if len(diverse_matches) >= 5:
+                    break
         
         return jsonify({
             'status': 'success',
             'message': 'AI analysis completed successfully',
             'analysis_steps': analysis_steps,
-            'matches': matches,
+            'matches': diverse_matches,
             'summary': {
                 'total_units_found': len(tamil_nadu_units),
-                'matches_identified': len(matches),
+                'matches_identified': len(diverse_matches),
                 'region': 'Tamil Nadu',
                 'urgency_level': urgency,
                 'blood_type_requested': blood_type,
