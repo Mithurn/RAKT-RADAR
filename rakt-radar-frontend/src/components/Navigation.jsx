@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Droplet, Route, Activity } from 'lucide-react';
+import { Home, Droplet, Route, Activity, MapPin } from 'lucide-react';
 
 const Navigation = () => {
   const location = useLocation();
@@ -9,6 +9,7 @@ const Navigation = () => {
     { path: '/', label: 'Dashboard', icon: Home },
     { path: '/blood-management', label: 'Blood Management', icon: Droplet },
     { path: '/smart-routing', label: 'Smart Routing', icon: Route },
+    { path: '/unit-tracking', label: 'Unit Tracking', icon: MapPin },
   ];
 
   return (
