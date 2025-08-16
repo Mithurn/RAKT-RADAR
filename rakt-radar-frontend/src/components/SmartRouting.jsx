@@ -332,7 +332,7 @@ const SmartRouting = () => {
     setCurrentAIStep(0);
     setAiResults(null);
     
-    addLiveUpdate(`🚨 AI analyzing emergency request for ${emergencyRequest.blood_type} blood...`, 'info');
+    addLiveUpdate(`Autonomous system analyzing emergency request for ${emergencyRequest.blood_type} blood...`, 'info');
 
     try {
       // Simulate AI analysis steps for demo
@@ -353,7 +353,7 @@ const SmartRouting = () => {
         
         // Add live update for each step
         const step = analysisSteps[i];
-        addLiveUpdate(`🧠 ${step.message}`, 'info');
+        addLiveUpdate(`AI ${step.message}`, 'info');
         
         // Wait between steps to show AI thinking
         await new Promise(resolve => setTimeout(resolve, 800));

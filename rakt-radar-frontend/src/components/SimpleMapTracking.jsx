@@ -48,10 +48,10 @@ const destinationIcon = L.divIcon({
 // Drone icon with pulsing animation
 const droneIcon = L.divIcon({
   className: 'custom-drone-marker',
-  html: '<div class="w-8 h-8 bg-purple-600 rounded-full border-2 border-white shadow-lg flex items-center justify-center animate-pulse"><svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>',
-  iconSize: [32, 32],
-  iconAnchor: [16, 32],
-  popupAnchor: [0, -32]
+  html: '<div class="w-16 h-16 bg-purple-600 rounded-full border-4 border-white shadow-2xl flex items-center justify-center animate-pulse" style="box-shadow: 0 0 20px rgba(139, 92, 246, 0.8);"><svg class="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>',
+  iconSize: [64, 64],
+  iconAnchor: [32, 64],
+  popupAnchor: [0, -64]
 });
 
 const EnhancedMapTracking = () => {
@@ -75,6 +75,7 @@ const EnhancedMapTracking = () => {
   const [droneSpeed, setDroneSpeed] = useState(45);
   const [weatherCondition, setWeatherCondition] = useState('clear');
   const [flightPath, setFlightPath] = useState([]);
+  const [droneTrail, setDroneTrail] = useState([]); // Add drone trail for visibility
 
   // Load transfer data
   useEffect(() => {
@@ -167,21 +168,67 @@ const EnhancedMapTracking = () => {
       routeLineRef.current = routeLine;
       setFlightPath(flightPathCoords);
     }
+    
+    // Draw drone trail
+    if (droneTrail.length > 1) {
+      const trailLine = L.polyline(droneTrail, {
+        color: '#F59E0B',
+        weight: 3,
+        opacity: 0.7,
+        dashArray: '8, 4',
+        className: 'drone-trail'
+      }).addTo(map);
+    }
 
     // Add drone marker
-    if (transferData.coordinates?.current) {
-      const droneMarker = L.marker(transferData.coordinates.current, { icon: droneIcon })
+    if (transferData.coordinates?.source) {
+      // Start drone at source position if current is not set
+      const initialPosition = transferData.coordinates?.current || transferData.coordinates.source;
+      
+      console.log('=== DRONE MARKER CREATION ===');
+      console.log('Transfer data:', transferData);
+      console.log('Coordinates:', transferData.coordinates);
+      console.log('Initial position:', initialPosition);
+      console.log('Drone icon:', droneIcon);
+      console.log('Map instance:', map);
+      
+      const droneMarker = L.marker(initialPosition, { icon: droneIcon })
         .addTo(map)
         .bindPopup(`
           <div class="text-center">
-            <div class="font-semibold text-purple-600">🚁 Blood Delivery Drone</div>
+            <div class="font-semibold text-purple-600">Autonomous Delivery System</div>
             <div class="text-sm">${transferData.blood_type} - ${transferData.quantity_ml}ml</div>
             <div class="text-xs text-gray-500">Altitude: ${droneAltitude}m | Speed: ${droneSpeed}km/h</div>
             <div class="text-xs text-gray-500">Battery: ${droneBattery}% | Status: ${currentStatus}</div>
           </div>
         `);
+      
       droneMarkerRef.current = droneMarker;
-      setDronePosition(transferData.coordinates.current);
+      setDronePosition(initialPosition);
+      
+      console.log('Drone marker created:', droneMarker);
+      console.log('Drone marker ref set:', droneMarkerRef.current);
+      console.log('Drone marker added to map');
+      
+      // Force the marker to be visible
+      droneMarker.setZIndexOffset(1000);
+      
+      // Also set initial flight path if not already set
+      if (!flightPath.length && transferData.coordinates?.destination) {
+        const source = transferData.coordinates.source;
+        const destination = transferData.coordinates.destination;
+        
+        // Calculate midpoint with elevation
+        const midLat = (source[0] + destination[0]) / 2;
+        const midLng = (source[1] + destination[1]) / 2;
+        const elevatedMid = [midLat + 0.01, midLng + 0.01];
+        
+        const flightPathCoords = [source, elevatedMid, destination];
+        setFlightPath(flightPathCoords);
+        console.log('Flight path set:', flightPathCoords);
+      }
+    } else {
+      console.error('No source coordinates found for drone marker');
     }
 
     // Fit map to show both markers
@@ -200,56 +247,149 @@ const EnhancedMapTracking = () => {
     };
   }, [transferData]);
 
+  // Redraw drone trail when it updates
+  useEffect(() => {
+    if (mapInstanceRef.current && droneTrail.length > 1) {
+      // Remove old trail
+      mapInstanceRef.current.eachLayer((layer) => {
+        if (layer.options.className === 'drone-trail') {
+          mapInstanceRef.current.removeLayer(layer);
+        }
+      });
+      
+      // Draw new trail
+      const trailLine = L.polyline(droneTrail, {
+        color: '#F59E0B',
+        weight: 3,
+        opacity: 0.7,
+        dashArray: '8, 4',
+        className: 'drone-trail'
+      }).addTo(mapInstanceRef.current);
+    }
+  }, [droneTrail]);
+
   // Drone tracking simulation
   useEffect(() => {
-    if (!isTracking || !transferData?.coordinates) return;
+    console.log('=== DRONE TRACKING EFFECT STARTED ===');
+    console.log('isTracking:', isTracking);
+    console.log('transferData:', transferData);
+    console.log('flightPath:', flightPath);
+    console.log('droneMarkerRef.current:', droneMarkerRef.current);
+    
+    if (!isTracking || !transferData?.coordinates) {
+      console.log('Tracking stopped - missing data');
+      return;
+    }
 
     const interval = setInterval(() => {
+      console.log('=== DRONE MOVEMENT UPDATE ===');
       setProgress(prev => {
         const newProgress = Math.min(prev + 0.03, 1); // Faster progress for drone
+        console.log('Progress updated to:', newProgress);
         
         // Update drone position on map
-        if (mapInstanceRef.current && droneMarkerRef.current && transferData.coordinates && flightPath.length > 0) {
-          // Use curved flight path for more realistic drone movement
-          const source = flightPath[0];
-          const destination = flightPath[flightPath.length - 1];
+        if (mapInstanceRef.current && droneMarkerRef.current && transferData.coordinates) {
+          console.log('Updating drone position, progress:', newProgress);
           
-          // Calculate intermediate position along curved path
-          const lat = source[0] + (destination[0] - source[0]) * newProgress;
-          const lng = source[1] + (destination[1] - source[1]) * newProgress;
+          let newPosition;
           
-          // Add slight altitude variation for drone movement
-          const altitudeVariation = Math.sin(newProgress * Math.PI) * 0.005;
-          const newPosition = [lat + altitudeVariation, lng];
-          
-          droneMarkerRef.current.setLatLng(newPosition);
-          setDronePosition(newPosition);
-          
-          // Update drone status based on progress
-          if (newProgress > 0.8) {
-            setCurrentStatus('approaching');
-          } else if (newProgress > 0.5) {
-            setCurrentStatus('in_transit');
-          } else if (newProgress > 0.2) {
-            setCurrentStatus('ascending');
+          // Try curved flight path first
+          if (flightPath.length > 0) {
+            console.log('Using curved flight path:', flightPath);
+            
+            // Calculate position along the curved flight path
+            const pathLength = flightPath.length;
+            
+            if (pathLength >= 2) {
+              // Calculate which segment of the path we're on
+              const totalDistance = newProgress * (pathLength - 1);
+              const segmentIndex = Math.floor(totalDistance);
+              const segmentProgress = totalDistance - segmentIndex;
+              
+              if (segmentIndex >= pathLength - 1) {
+                // We're at the destination
+                newPosition = flightPath[pathLength - 1];
+                console.log('Drone at destination:', newPosition);
+              } else {
+                // Interpolate between two path points
+                const startPoint = flightPath[segmentIndex];
+                const endPoint = flightPath[segmentIndex + 1];
+                
+                console.log('Interpolating between:', startPoint, 'and', endPoint, 'progress:', segmentProgress);
+                
+                const lat = startPoint[0] + (endPoint[0] - startPoint[0]) * segmentProgress;
+                const lng = startPoint[1] + (endPoint[1] - startPoint[1]) * segmentProgress;
+                
+                // Add slight altitude variation for realistic drone movement
+                const altitudeVariation = Math.sin(newProgress * Math.PI) * 0.005;
+                newPosition = [lat + altitudeVariation, lng];
+                
+                console.log('New drone position (curved):', newPosition);
+              }
+            }
           }
           
-          // Update drone metrics
-          setDroneAltitude(Math.max(80, 120 - (newProgress * 40))); // Gradually descend
-          setDroneBattery(Math.max(20, 85 - (newProgress * 65))); // Battery consumption
-          setDroneSpeed(newProgress > 0.8 ? 25 : 45); // Slow down for landing
-          
-          // Update weather conditions (simulate real-time changes)
-          if (newProgress > 0.6 && weatherCondition === 'clear') {
-            setWeatherCondition('light_wind');
+          // Fallback to simple straight line if curved path fails
+          if (!newPosition && transferData.coordinates?.source && transferData.coordinates?.destination) {
+            console.log('Using fallback straight line path');
+            
+            const source = transferData.coordinates.source;
+            const destination = transferData.coordinates.destination;
+            
+            const lat = source[0] + (destination[0] - source[0]) * newProgress;
+            const lng = source[1] + (destination[1] - source[1]) * newProgress;
+            
+            newPosition = [lat, lng];
+            console.log('New drone position (straight):', newPosition);
           }
+          
+          // Ensure the new position is valid coordinates
+          if (newPosition && Array.isArray(newPosition) && newPosition.length === 2 && 
+              !isNaN(newPosition[0]) && !isNaN(newPosition[1])) {
+            
+            console.log('Setting drone position to:', newPosition);
+            droneMarkerRef.current.setLatLng(newPosition);
+            setDronePosition(newPosition);
+            
+            // Add position to drone trail for visibility
+            setDroneTrail(prev => [...prev, newPosition]);
+            
+            // Update drone status based on progress
+            if (newProgress > 0.8) {
+              setCurrentStatus('approaching');
+            } else if (newProgress > 0.5) {
+              setCurrentStatus('in_transit');
+            } else if (newProgress > 0.2) {
+              setCurrentStatus('ascending');
+            }
+            
+            // Update drone metrics
+            setDroneAltitude(Math.max(80, Math.round(120 - (newProgress * 40)))); // Gradually descend
+            setDroneBattery(Math.max(20, Math.round(85 - (newProgress * 65)))); // Battery consumption
+            setDroneSpeed(newProgress > 0.8 ? 25 : 45); // Slow down for landing
+            
+            // Update weather conditions (simulate real-time changes)
+            if (newProgress > 0.6 && weatherCondition === 'clear') {
+              setWeatherCondition('light_wind');
+            }
+          } else {
+            console.error('Invalid drone position calculated:', newPosition);
+          }
+        } else {
+          console.log('Missing required data for drone movement:');
+          console.log('- mapInstanceRef.current:', mapInstanceRef.current);
+          console.log('- droneMarkerRef.current:', droneMarkerRef.current);
+          console.log('- transferData.coordinates:', transferData.coordinates);
         }
         
         return newProgress;
       });
     }, 1000); // Update every second for smoother drone movement
 
-    return () => clearInterval(interval);
+    return () => {
+      console.log('Clearing drone tracking interval');
+      clearInterval(interval);
+    };
   }, [isTracking, transferData, flightPath, weatherCondition]);
 
   // Update status based on progress
@@ -279,12 +419,12 @@ const EnhancedMapTracking = () => {
 
   const getStatusIcon = (status) => {
     switch (status) {
-      case 'dispatched': return '🚁';
+      case 'dispatched': return '📡';
       case 'ascending': return '⬆️';
       case 'in_transit': return '✈️';
       case 'approaching': return '⬇️';
       case 'delivered': return '✅';
-      default: return '🚁';
+      default: return '📡';
     }
   };
 
@@ -299,7 +439,7 @@ const EnhancedMapTracking = () => {
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="mb-6">
+        <div className="mb-6 bg-white/80 backdrop-blur-sm rounded-lg p-4 shadow-sm border">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <Button 
@@ -311,8 +451,8 @@ const EnhancedMapTracking = () => {
                 Back
               </Button>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">🚁 Drone Blood Delivery Tracking</h1>
-                <p className="text-gray-600">Live tracking of emergency blood delivery via autonomous drone</p>
+                <h1 className="text-3xl font-bold text-gray-900">Autonomous Blood Delivery Tracking</h1>
+                <p className="text-gray-600">Live tracking of emergency blood delivery via autonomous drone system</p>
               </div>
             </div>
             <div className="text-right">
@@ -329,36 +469,14 @@ const EnhancedMapTracking = () => {
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center space-x-2">
                   <Navigation className="w-5 h-5 text-purple-600" />
-                  <span>Live Drone Flight Path</span>
+                  <span>Live Delivery Flight Path</span>
                 </CardTitle>
                 <CardDescription>
-                  Real-time tracking of blood delivery drone from {transferData?.source_blood_bank} to {transferData?.destination}
+                  Real-time tracking of blood delivery system from {transferData?.source_blood_bank} to {transferData?.destination}
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-0 h-full">
                 <div ref={mapRef} className="w-full h-full" />
-                
-                {/* Drone Status Overlay */}
-                <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm rounded-lg p-3 shadow-lg border">
-                  <div className="space-y-2">
-                    <div className="flex items-center space-x-2">
-                      <Battery className="w-4 h-4 text-green-600" />
-                      <span className="text-sm font-medium">Battery: {droneBattery}%</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Cloud className="w-4 h-4 text-blue-600" />
-                      <span className="text-sm font-medium">Altitude: {droneAltitude}m</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Zap className="w-4 h-4 text-yellow-600" />
-                      <span className="text-sm font-medium">Speed: {droneSpeed} km/h</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Wifi className="w-4 h-4 text-purple-600" />
-                      <span className="text-sm font-medium">Weather: {weatherCondition.replace('_', ' ')}</span>
-                    </div>
-                  </div>
-                </div>
               </CardContent>
             </Card>
           </div>
@@ -406,6 +524,48 @@ const EnhancedMapTracking = () => {
               </CardContent>
             </Card>
 
+            {/* System Status Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <Zap className="w-5 h-5 text-purple-600" />
+                  <span>System Status</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex items-center space-x-2">
+                    <Battery className="w-4 h-4 text-green-600" />
+                    <div>
+                      <div className="text-sm text-gray-500">Battery</div>
+                      <div className="font-semibold text-lg">{Math.round(droneBattery)}%</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Cloud className="w-4 h-4 text-blue-600" />
+                    <div>
+                      <div className="text-sm text-gray-500">Altitude</div>
+                      <div className="font-semibold text-lg">{Math.round(droneAltitude)}m</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Zap className="w-4 h-4 text-yellow-600" />
+                    <div>
+                      <div className="text-sm text-gray-500">Speed</div>
+                      <div className="font-semibold text-lg">{Math.round(droneSpeed)} km/h</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Wifi className="w-4 h-4 text-purple-600" />
+                    <div>
+                      <div className="text-sm text-gray-500">Weather</div>
+                      <div className="font-semibold text-lg capitalize">{weatherCondition.replace('_', ' ')}</div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Status Timeline */}
             <Card>
               <CardHeader>
@@ -417,8 +577,8 @@ const EnhancedMapTracking = () => {
               <CardContent>
                 <div className="space-y-4">
                   {[
-                    { status: 'dispatched', label: 'Drone Dispatched', time: 'Now' },
-                    { status: 'ascending', label: 'Drone Ascending', time: progress > 0.2 ? '2 min ago' : 'Pending' },
+                    { status: 'dispatched', label: 'System Dispatched', time: 'Now' },
+                    { status: 'ascending', label: 'System Ascending', time: progress > 0.2 ? '2 min ago' : 'Pending' },
                     { status: 'in_transit', label: 'In Flight', time: progress > 0.5 ? '5 min ago' : 'Pending' },
                     { status: 'approaching', label: 'Approaching Hospital', time: progress > 0.8 ? '8 min ago' : 'Pending' },
                     { status: 'delivered', label: 'Delivered', time: progress >= 1 ? '10 min ago' : 'Pending' }
@@ -452,11 +612,36 @@ const EnhancedMapTracking = () => {
                     {currentStatus.replace('_', ' ').toUpperCase()}
                   </Badge>
                   <div className="text-sm text-gray-500 mt-2">
-                    {currentStatus === 'dispatched' && 'Drone preparing for takeoff...'}
-                    {currentStatus === 'ascending' && 'Drone ascending to flight altitude...'}
-                    {currentStatus === 'in_transit' && 'Drone flying to destination...'}
-                    {currentStatus === 'approaching' && 'Drone preparing for landing...'}
+                    {currentStatus === 'dispatched' && 'Autonomous system preparing for deployment...'}
+                    {currentStatus === 'ascending' && 'System ascending to optimal flight altitude...'}
+                    {currentStatus === 'in_transit' && 'System in flight to destination...'}
+                    {currentStatus === 'approaching' && 'System preparing for precision landing...'}
                     {currentStatus === 'delivered' && 'Blood successfully delivered!'}
+                  </div>
+                  
+                  {/* Debug Test Button */}
+                  <div className="mt-4 pt-4 border-t">
+                    <Button 
+                      onClick={() => {
+                        console.log('=== MANUAL DRONE TEST ===');
+                        console.log('Current drone position:', dronePosition);
+                        console.log('Drone marker ref:', droneMarkerRef.current);
+                        console.log('Flight path:', flightPath);
+                        console.log('Progress:', progress);
+                        
+                        if (droneMarkerRef.current && transferData?.coordinates?.destination) {
+                          const dest = transferData.coordinates.destination;
+                          console.log('Moving drone to destination:', dest);
+                          droneMarkerRef.current.setLatLng(dest);
+                          setDronePosition(dest);
+                        }
+                      }}
+                      variant="outline"
+                      size="sm"
+                      className="text-xs"
+                    >
+                      Test Drone Movement
+                    </Button>
                   </div>
                 </div>
               </CardContent>
