@@ -21,7 +21,7 @@ import {
   Loader2
 } from 'lucide-react';
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = '/api';
 
 const SmartRouting = () => {
   const navigate = useNavigate();
@@ -335,6 +335,37 @@ const SmartRouting = () => {
     addLiveUpdate(`Autonomous system analyzing emergency request for ${emergencyRequest.blood_type} blood...`, 'info');
 
     try {
+      // FIRST: Create the emergency request via API
+      console.log('📡 Creating emergency request via API...');
+      
+      const requestData = {
+        blood_type: emergencyRequest.blood_type,
+        quantity_ml: parseInt(emergencyRequest.quantity_needed),
+        urgency: emergencyRequest.urgency || 'high',
+        notes: emergencyRequest.notes || 'Emergency request from hospital'
+      };
+      
+      console.log('Request data:', requestData);
+      
+      const response = await fetch('/api/emergency_requests', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(requestData)
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create emergency request');
+      }
+      
+      const apiResponse = await response.json();
+      console.log('✅ Emergency request created via API:', apiResponse);
+      
+      addLiveUpdate(`✅ Emergency request created successfully!`, 'success');
+      
       // Simulate AI analysis steps for demo
       const analysisSteps = [
         { step: 1, message: 'Analyzing blood demand patterns', details: 'Scanning hospital requirements and urgency levels', status: 'completed', progress: 100 },
@@ -361,205 +392,65 @@ const SmartRouting = () => {
 
       console.log('✅ AI analysis steps completed, finding matches...');
 
-      // Find best matches - prioritize Tamil Nadu blood banks for optimal distance
-      const availableUnits = bloodUnits.filter(unit => 
-        unit.blood_type === emergencyRequest.blood_type && 
-        unit.status === 'available' &&
-        !unit.is_flagged_for_expiry
-      );
+      // Use the API response data instead of local filtering
+      const suggestedBank = apiResponse.suggested_bank;
+      const mlConfidence = apiResponse.ml_confidence;
+      const predictedEta = apiResponse.predicted_eta;
+      const distanceKm = apiResponse.distance_km;
       
-      console.log('Available units found:', availableUnits.length);
+      console.log('API suggested bank:', suggestedBank);
+      console.log('ML confidence:', mlConfidence);
+      console.log('Predicted ETA:', predictedEta);
+      console.log('Distance:', distanceKm);
       
-      const destinationHospital = hospitals.find(h => h.id === emergencyRequest.hospital_id);
-      console.log('Destination hospital:', destinationHospital);
-      
-      if (availableUnits.length > 0) {
-        // Sort by distance to destination (Tamil Nadu hospitals only)
-        const sortedUnits = availableUnits.sort((a, b) => {
-          const sourceBankA = bloodBanks.find(bank => bank.id === a.blood_bank_id);
-          const sourceBankB = bloodBanks.find(bank => bank.id === b.blood_bank_id);
-          
-          if (!sourceBankA || !sourceBankB) return 0;
-          
-          const distanceA = calculateOptimalRoute(sourceBankA, destinationHospital).distance;
-          const distanceB = calculateOptimalRoute(sourceBankB, destinationHospital).distance;
-          
-          return distanceA - distanceB; // Sort by shortest distance first
-        });
-
-        // Ensure diversity by limiting similar blood banks
-        const diverseUnits = [];
-        const seenBloodBanks = new Set();
-        
-        for (const unit of sortedUnits) {
-          const sourceBank = bloodBanks.find(b => b.id === unit.blood_bank_id);
-          if (sourceBank && !seenBloodBanks.has(sourceBank.name)) {
-            diverseUnits.push(unit);
-            seenBloodBanks.add(sourceBank.name);
+      // Create AI results using the API data
+      const aiResults = {
+        ai_summary: {
+          analysis_results: {
+            total_units_scanned: 'All blood banks scanned',
+            ai_confidence_score: parseFloat(mlConfidence.replace('%', '')),
+            optimal_matches_identified: 1
+          },
+          recommendations: {
+            primary_match: {
+              blood_bank: suggestedBank.name,
+              location: `${suggestedBank.city}, ${suggestedBank.state}`,
+              distance: distanceKm,
+              eta: predictedEta,
+              confidence: mlConfidence,
+              optimization_note: 'AI-optimized match based on distance, availability, and urgency'
+            }
           }
-          if (diverseUnits.length >= 3) break; // Limit to 3 diverse matches
-        }
-
-        const bestMatch = diverseUnits[0];
-        const sourceBank = bloodBanks.find(b => b.id === bestMatch.blood_bank_id);
-        const route = calculateOptimalRoute(sourceBank, destinationHospital);
-        
-        console.log('Best match found:', bestMatch);
-        console.log('Source bank:', sourceBank);
-        console.log('Route calculated:', route);
-          
-        // Create AI results for demo with diverse blood banks
-        const demoResults = {
-          ai_summary: {
-            analysis_results: {
-              total_units_scanned: bloodUnits.length,
-              ai_confidence_score: 95.8,
-              optimal_matches_identified: diverseUnits.length
-            },
-            recommendations: {
-              waste_prevention_potential: 'High efficiency route identified',
-              estimated_lives_saved: Math.floor(Math.random() * 5) + 1
-            },
-            smart_routing_insights: {
-              fastest_route_minutes: Math.floor(route.distance * 0.8),
-              route_optimization_score: 94,
-              total_routes_analyzed: 12,
-              safety_recommendations: 'Safe route with minimal traffic'
-            }
-          },
-          matches: diverseUnits.map((unit, index) => {
-            const sourceBank = bloodBanks.find(b => b.id === unit.blood_bank_id);
-            const unitRoute = calculateOptimalRoute(sourceBank, destinationHospital);
-            
-            // Ensure realistic distances - minimum 5km for demo believability
-            const realisticDistance = Math.max(unitRoute.distance, 5 + (index * 3));
-            
-            return {
-              blood_unit_id: unit.id,
-              blood_type: unit.blood_type,
-              quantity_ml: unit.quantity_ml,
-              entity_name: destinationHospital.name,
-              source_blood_bank: sourceBank ? sourceBank.name : 'AI-Selected Blood Bank',
-              source_location: sourceBank ? `${sourceBank.city}, ${sourceBank.state}` : 'Location details available',
-              distance_km: Math.round(realisticDistance * 100) / 100,
-              estimated_time_hours: Math.ceil(realisticDistance / 60),
-              ai_score: Math.floor(Math.random() * 20) + 80,
-              compatibility_score: 100,
-              coordinates: {
-                source: sourceBank ? [sourceBank.latitude || 13.0827, sourceBank.longitude || 80.2707] : [13.0827, 80.2707],
-                destination: [destinationHospital.latitude || 13.0067, destinationHospital.longitude || 80.2206],
-                current: [13.0447, 80.2456]
-              },
-              smart_routing: {
-                estimated_time_minutes: Math.floor(realisticDistance * 0.8),
-                route_quality: index === 0 ? 'excellent' : index === 1 ? 'good' : 'fair',
-                traffic_status: index === 0 ? 'clear' : index === 1 ? 'moderate' : 'light',
-                fuel_cost_estimate: Math.floor(realisticDistance * 0.5),
-                recommended_departure_time: new Date(Date.now() + 30 * 60000).toLocaleTimeString()
-              }
-            };
-          })
-        };
-
-        setAiResults(demoResults);
-        addLiveUpdate(`✅ AI found ${diverseUnits.length} optimal match(es)!`, 'success');
-        
-        setSelectedMatch({
-          ...bestMatch,
-          source: sourceBank,
-          destination: destinationHospital,
-          route,
-          emergency: true
-        });
-      } else {
-        // For demo purposes, create mock results even if no real blood units found
-        console.log('No real blood units found, creating demo results...');
-        
-        const mockRoute = {
-          distance: 25.5,
-          estimatedHours: 1,
-          coordinates: [[72.8777, 19.0760], [72.8777, 19.0760]]
-        };
-        
-        const demoResults = {
-          ai_summary: {
-            analysis_results: {
-              total_units_scanned: bloodUnits.length,
-              ai_confidence_score: 95.8,
-              optimal_matches_identified: 2
-            },
-            recommendations: {
-              waste_prevention_potential: 'High efficiency route identified',
-              estimated_lives_saved: Math.floor(Math.random() * 5) + 1
-            },
-            smart_routing_insights: {
-              fastest_route_minutes: Math.floor(mockRoute.distance * 0.8),
-              route_optimization_score: 94,
-              total_routes_analyzed: 12,
-              safety_recommendations: 'Safe route with minimal traffic'
-            }
-          },
-          matches: [
-            {
-              blood_unit_id: 'demo-1',
-              blood_type: emergencyRequest.blood_type,
-              quantity_ml: 450,
-              entity_name: 'Apollo Hospital Chennai',
-              source_blood_bank: 'Chennai Central Blood Bank',
-              source_location: 'Chennai, Tamil Nadu',
-              distance_km: mockRoute.distance,
-              estimated_time_hours: mockRoute.estimatedHours,
-              ai_score: 95,
-              compatibility_score: 100,
-              coordinates: {
-                source: [13.0827, 80.2707],
-                destination: [13.0067, 80.2206],
-                current: [13.0447, 80.2456]
-              },
-              smart_routing: {
-                estimated_time_minutes: Math.floor(mockRoute.distance * 0.8),
-                route_quality: 'excellent',
-                traffic_status: 'clear',
-                fuel_cost_estimate: Math.floor(mockRoute.distance * 0.5),
-                recommended_departure_time: new Date(Date.now() + 30 * 60000).toLocaleTimeString()
-              }
-            },
-            {
-              blood_unit_id: 'demo-2',
-              blood_type: emergencyRequest.blood_type,
-              quantity_ml: 500,
-              entity_name: 'Fortis Malar Hospital',
-              source_blood_bank: 'Red Cross Blood Bank Chennai',
-              source_location: 'Chennai, Tamil Nadu',
-              distance_km: mockRoute.distance + 8,
-              estimated_time_hours: mockRoute.estimatedHours + 1,
-              ai_score: 88,
-              compatibility_score: 100,
-              coordinates: {
-                source: [13.0827, 80.2707],
-                destination: [13.0067, 80.2206],
-                current: [13.0447, 80.2456]
-              },
-              smart_routing: {
-                estimated_time_minutes: Math.floor((mockRoute.distance + 8) * 0.8),
-                route_quality: 'good',
-                traffic_status: 'moderate',
-                fuel_cost_estimate: Math.floor((mockRoute.distance + 8) * 0.5),
-                recommended_departure_time: new Date(Date.now() + 60 * 60000).toLocaleTimeString()
-              }
-            }
-          ]
-        };
-
-        setAiResults(demoResults);
-        addLiveUpdate(`✅ AI found 2 demo matches for ${emergencyRequest.blood_type} blood!`, 'success');
-      }
+        },
+        blood_units: [{
+          id: 'api-suggested',
+          blood_type: emergencyRequest.blood_type,
+          quantity_ml: requestData.quantity_ml,
+          source_bank: suggestedBank.name,
+          location: `${suggestedBank.city}, ${suggestedBank.state}`,
+          distance: distanceKm,
+          eta: predictedEta,
+          confidence: mlConfidence
+        }],
+        routes: [{
+          from: suggestedBank.name,
+          to: 'Your Hospital',
+          distance: distanceKm,
+          estimated_hours: Math.ceil(parseInt(predictedEta.replace(' minutes', '')) / 60),
+          route_quality: 'Excellent',
+          optimization_note: 'AI-optimized route for fastest delivery'
+        }]
+      };
+      
+      setAiResults(aiResults);
+      addLiveUpdate(`✅ AI found optimal match: ${suggestedBank.name} (${mlConfidence} confidence)`, 'success');
       
       console.log('🎯 Emergency request processing completed successfully!');
       
     } catch (error) {
       console.error('❌ Error in emergency request:', error);
-      addLiveUpdate('❌ Error processing emergency request', 'error');
+      addLiveUpdate(`❌ Error: ${error.message}`, 'error');
+      alert(`Error creating emergency request: ${error.message}`);
     } finally {
       setIsAIAnalyzing(false);
     }
@@ -1116,12 +1007,12 @@ const SmartRouting = () => {
                         </div>
                         <div>
                           <div className="text-sm text-gray-600">Lives Saved</div>
-                          <div className="text-xl font-bold text-blue-600">{aiResults.ai_summary.recommendations.estimated_lives_saved}</div>
+                          <div className="text-xl font-bold text-blue-600">{aiResults.ai_summary.recommendations.primary_match.confidence}</div>
                         </div>
                       </div>
 
                       {/* Smart Routing Information */}
-                      {aiResults.ai_summary.smart_routing_insights && (
+                      {aiResults.routes && aiResults.routes.length > 0 && (
                         <div className="mt-4">
                           <h5 className="font-medium text-green-800 mb-3 flex items-center gap-2">
                             <Route className="w-4 h-4" />
@@ -1137,25 +1028,25 @@ const SmartRouting = () => {
                             <div>
                               <div className="text-sm text-gray-600">Fastest Route</div>
                               <div className="text-lg font-bold text-blue-600">
-                                {aiResults.ai_summary.smart_routing_insights.fastest_route_minutes} min
+                                {aiResults.routes[0].estimated_hours}h
                               </div>
                             </div>
                             <div>
                               <div className="text-sm text-gray-600">Route Quality</div>
                               <div className="text-lg font-bold text-blue-600">
-                                {aiResults.ai_summary.smart_routing_insights.route_optimization_score}%
+                                {aiResults.routes[0].route_quality}
                               </div>
                             </div>
                             <div>
-                              <div className="text-sm text-gray-600">Routes Analyzed</div>
+                              <div className="text-sm text-gray-600">Network Optimized</div>
                               <div className="text-lg font-bold text-blue-600">
-                                {aiResults.ai_summary.smart_routing_insights.total_routes_analyzed}
+                                {aiResults.routes[0].optimization_note}
                               </div>
                             </div>
                             <div>
-                              <div className="text-sm text-gray-600">Safety Score</div>
+                              <div className="text-sm text-gray-600">Distance</div>
                               <div className="text-lg font-bold text-blue-600">
-                                {aiResults.ai_summary.smart_routing_insights.safety_recommendations.includes('safe') ? '95%' : '90%'}
+                                {aiResults.routes[0].distance}km
                               </div>
                             </div>
                           </div>
@@ -1163,11 +1054,11 @@ const SmartRouting = () => {
                       )}
 
                       {/* Available Blood Unit Matches */}
-                      {aiResults && aiResults.matches.length > 0 && (
+                      {aiResults && aiResults.blood_units.length > 0 && (
                         <div className="mt-4">
                           <h5 className="font-medium text-blue-800 mb-3 flex items-center gap-2">
                             <CheckCircle className="w-4 h-4" />
-                            Available Blood Units ({aiResults.matches.length})
+                            Available Blood Units ({aiResults.blood_units.length})
                           </h5>
                           <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded-lg">
                             <div className="text-xs text-blue-700 flex items-center gap-2">
@@ -1176,29 +1067,29 @@ const SmartRouting = () => {
                             </div>
                           </div>
                           <div className="space-y-3">
-                            {aiResults.matches.map((match, index) => (
+                            {aiResults.blood_units.map((unit, index) => (
                               <div 
-                                key={match.blood_unit_id} 
+                                key={unit.id} 
                                 className={`p-4 border rounded-lg cursor-pointer transition-all duration-200 hover:shadow-md ${
-                                  selectedMatch && selectedMatch.blood_unit_id === match.blood_unit_id 
+                                  selectedMatch && selectedMatch.blood_unit_id === unit.id 
                                     ? 'border-blue-500 bg-blue-50' 
                                     : 'border-gray-200 hover:border-blue-300'
                                 }`}
-                                onClick={() => setSelectedMatch(match)}
+                                onClick={() => setSelectedMatch(unit)}
                               >
                                 <div className="flex items-center justify-between mb-3">
                                   <div className="flex items-center gap-3">
                                     <Badge variant="outline" className="text-lg px-3 py-1">
-                                      {match.blood_type}
+                                      {unit.blood_type}
                                     </Badge>
                                     <Badge className="bg-green-100 text-green-800">
-                                      {match.quantity_ml}ml
+                                      {unit.quantity_ml}ml
                                     </Badge>
                                   </div>
                                   <div className="text-right">
-                                    <div className="text-sm text-gray-600">AI Score</div>
-                                    <div className="text-lg font-bold text-blue-600">{match.ai_score}%</div>
-                                    <div className="text-xs text-green-600">TN optimized</div>
+                                    <div className="text-sm text-gray-600">AI Confidence</div>
+                                    <div className="text-lg font-bold text-blue-600">{unit.confidence}%</div>
+                                    <div className="text-xs text-green-600">Local network</div>
                                   </div>
                                 </div>
                                 
@@ -1206,10 +1097,10 @@ const SmartRouting = () => {
                                   <div className="text-sm text-gray-600 mb-2">Source Blood Bank</div>
                                   <div className="flex items-center gap-2">
                                     <MapPin className="w-4 h-4 text-blue-600" />
-                                    <span className="font-medium">{match.source_blood_bank || 'AI-Selected Blood Bank'}</span>
+                                    <span className="font-medium">{unit.source_bank || 'AI-Selected Blood Bank'}</span>
                                   </div>
                                   <div className="text-xs text-gray-500 mt-1">
-                                    {match.source_location || 'Location details available'}
+                                    {unit.location || 'Location details available'}
                                   </div>
                                   <div className="mt-2 text-xs text-green-600 flex items-center gap-1">
                                     <MapPin className="w-3 h-3" />
@@ -1220,27 +1111,27 @@ const SmartRouting = () => {
                                 <div className="grid grid-cols-2 gap-4 text-sm mb-3">
                                   <div>
                                     <span className="text-gray-600">Distance:</span>
-                                    <div className="font-medium">{match.distance_km}km</div>
+                                    <div className="font-medium">{unit.distance}km</div>
                                     <div className="text-xs text-green-600">TN local</div>
                                   </div>
                                   <div>
                                     <span className="text-gray-600">Est. Time:</span>
-                                    <div className="font-medium">{match.estimated_time_hours}h</div>
+                                    <div className="font-medium">{unit.eta}</div>
                                     <div className="text-xs text-green-600">Local roads</div>
                                   </div>
                                   <div>
                                     <span className="text-gray-600">Route Quality:</span>
-                                    <div className="font-medium capitalize">{match.smart_routing.route_quality}</div>
+                                    <div className="font-medium capitalize">{aiResults.routes[0].route_quality}</div>
                                     <div className="text-xs text-green-600">TN optimized</div>
                                   </div>
                                   <div>
                                     <span className="text-gray-600">Fuel Cost:</span>
-                                    <div className="font-medium">₹{match.smart_routing.fuel_cost_estimate}</div>
+                                    <div className="font-medium">₹{Math.floor(unit.distance * 55)}</div>
                                     <div className="text-xs text-green-600">Local rates</div>
                                   </div>
                                 </div>
 
-                                {selectedMatch && selectedMatch.blood_unit_id === match.blood_unit_id && (
+                                {selectedMatch && selectedMatch.id === unit.id && (
                                   <div className="pt-3 border-t border-gray-200">
                                     <div className="flex items-center justify-between">
                                       <div className="text-sm text-gray-600">
@@ -1249,20 +1140,20 @@ const SmartRouting = () => {
                                       <Button 
                                         onClick={() => {
                                           // Store transfer data in localStorage for future use
-                                          localStorage.setItem('currentTransfer', JSON.stringify(match));
+                                          localStorage.setItem('currentTransfer', JSON.stringify(unit));
                                           // Navigate to tracking page with transfer data
                                           navigate('/tracking', {
                                             state: {
                                               transferData: {
-                                                ...match,
-                                                cost: Math.floor(match.distance_km * 55), // Slightly higher cost for drone delivery
+                                                ...unit,
+                                                cost: Math.floor(unit.distance * 55), // Slightly higher cost for drone delivery
                                                 status: 'dispatched',
                                                 delivery_method: 'drone', // Indicate this is drone delivery
-                                                estimated_time_hours: Math.max(0.25, match.distance_km / 60), // Drone is 4x faster
+                                                estimated_time_hours: Math.max(0.25, unit.distance / 60), // Drone is 4x faster
                                                 coordinates: {
-                                                  source: match.coordinates?.source || [13.0827, 80.2707], // Chennai Central Blood Bank coordinates
-                                                  destination: match.coordinates?.destination || [13.0067, 80.2206], // Chennai coordinates
-                                                  current: match.coordinates?.current || [13.0447, 80.2456] // Midpoint for drone start
+                                                  source: unit.coordinates?.source || [13.0827, 80.2707], // Chennai Central Blood Bank coordinates
+                                                  destination: unit.coordinates?.destination || [13.0067, 80.2206], // Chennai coordinates
+                                                  current: unit.coordinates?.current || [13.0447, 80.2456] // Midpoint for drone start
                                                 },
                                                 drone_specs: {
                                                   model: 'RAKT-DRONE-X1',

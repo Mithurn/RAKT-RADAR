@@ -5,38 +5,58 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from flask import Flask, send_from_directory
 from flask_cors import CORS
-from src.models.models import db, Hospital, BloodBank, BloodUnit, Transfer
+
+# Create Flask app first
+app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
+app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
+
+# Enable CORS for all routes
+CORS(app, supports_credentials=True)
+
+# Database configuration
+app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///rakt_radar.db"
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Initialize database
+from src.models.models import db
+db.init_app(app)
+
+# Register blueprints
 from src.routes.hospitals import hospitals_bp
 from src.routes.blood_banks import blood_banks_bp
 from src.routes.blood_units import blood_units_bp
 from src.routes.transfers import transfers_bp
 from src.routes.intelligence import intelligence_bp
+from src.routes.user import user_bp
+from src.routes.emergency_requests import emergency_requests_bp
+from src.routes.routes import routes_bp
 
-app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
-app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
-
-# Enable CORS for all routes
-CORS(app)
-
-# Register blueprints
 app.register_blueprint(hospitals_bp, url_prefix='/api')
 app.register_blueprint(blood_banks_bp, url_prefix='/api')
 app.register_blueprint(blood_units_bp, url_prefix='/api')
 app.register_blueprint(transfers_bp, url_prefix='/api')
 app.register_blueprint(intelligence_bp, url_prefix='/api')
+app.register_blueprint(user_bp, url_prefix='/api')
+app.register_blueprint(emergency_requests_bp, url_prefix='/api')
+app.register_blueprint(routes_bp, url_prefix='/api')
 
-# Database configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///rakt_radar.db"
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db.init_app(app)
-
-with app.app_context():
-    db.create_all()
-    
-    # Check if we need to populate mock data
-    if Hospital.query.count() == 0:
-        from src.mock_data import populate_mock_data
-        populate_mock_data()
+def initialize_database():
+    """Initialize database and seed demo data"""
+    with app.app_context():
+        db.create_all()
+        
+        # Check if we need to populate mock data
+        from src.models.models import Hospital
+        if Hospital.query.count() == 0:
+            from src.mock_data import populate_mock_data
+            populate_mock_data()
+        
+        # Check if we need to seed demo users
+        from src.models.user import User
+        if User.query.count() == 0:
+            from src.demo_seed import seed_demo_users, seed_demo_blood_units
+            seed_demo_users()
+            seed_demo_blood_units()
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
@@ -56,4 +76,12 @@ def serve(path):
 
 
 if __name__ == '__main__':
+    # Initialize database before starting the server
+    initialize_database()
+    
+    print("🚀 RAKT-RADAR 3-POV Demo System starting...")
+    print("📊 Database initialized with demo data")
+    print("🔑 Demo users created successfully")
+    print("🌐 Starting Flask server on http://localhost:8000")
+    
     app.run(host='0.0.0.0', port=8000, debug=True)
