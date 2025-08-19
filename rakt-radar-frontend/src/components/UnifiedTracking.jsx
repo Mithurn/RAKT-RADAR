@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { 
@@ -11,14 +11,11 @@ import {
   ArrowLeft,
   Building2,
   Heart,
-  Navigation,
-  Zap,
-  Battery,
-  Wifi,
-  Cloud,
   Truck,
   User,
-  RefreshCw
+  Phone,
+  Navigation,
+  Package
 } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -34,34 +31,26 @@ L.Icon.Default.mergeOptions({
 // Custom icons
 const hospitalIcon = L.divIcon({
   className: 'custom-hospital-marker',
-  html: '<div class="w-8 h-8 bg-blue-600 rounded-full border-2 border-white shadow-lg flex items-center justify-center"><svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/></svg></div>',
-  iconSize: [32, 32],
-  iconAnchor: [16, 32],
-  popupAnchor: [0, -32]
+  html: '<div class="w-10 h-10 bg-blue-600 rounded-full border-3 border-white shadow-lg flex items-center justify-center"><svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/></svg></div>',
+  iconSize: [40, 40],
+  iconAnchor: [20, 40],
+  popupAnchor: [0, -40]
 });
 
 const bloodBankIcon = L.divIcon({
   className: 'custom-blood-bank-marker',
-  html: '<div class="w-8 h-8 bg-red-600 rounded-full border-2 border-white shadow-lg flex items-center justify-center"><svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg></div>',
-  iconSize: [32, 32],
-  iconAnchor: [16, 32],
-  popupAnchor: [0, -32]
+  html: '<div class="w-10 h-10 bg-red-600 rounded-full border-3 border-white shadow-lg flex items-center justify-center"><svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg></div>',
+  iconSize: [40, 40],
+  iconAnchor: [20, 40],
+  popupAnchor: [0, -40]
 });
 
 const driverIcon = L.divIcon({
   className: 'custom-driver-marker',
-  html: '<div class="w-12 h-12 bg-green-600 rounded-full border-3 border-white shadow-xl flex items-center justify-center animate-pulse" style="box-shadow: 0 0 20px rgba(34, 197, 94, 0.8);"><svg class="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/><path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1l2-2h4l2 2h1a1 1 0 001-1V5a1 1 0 00-1-1H3z"/></svg></div>',
-  iconSize: [48, 48],
-  iconAnchor: [24, 48],
-  popupAnchor: [0, -48]
-});
-
-const destinationIcon = L.divIcon({
-  className: 'custom-destination-marker',
-  html: '<div class="w-8 h-8 bg-green-600 rounded-full border-2 border-white shadow-lg flex items-center justify-center"><svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"/></svg></div>',
-  iconSize: [32, 32],
-  iconAnchor: [16, 32],
-  popupAnchor: [0, -32]
+  html: '<div class="w-14 h-14 bg-green-600 rounded-full border-4 border-white shadow-xl flex items-center justify-center animate-pulse" style="box-shadow: 0 0 25px rgba(34, 197, 94, 0.8);"><svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/><path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1l2-2h4l2 2h1a1 1 0 001-1V5a1 1 0 00-1-1H3z"/></svg></div>',
+  iconSize: [56, 56],
+  iconAnchor: [28, 56],
+  popupAnchor: [0, -56]
 });
 
 const API_BASE = '/api';
@@ -76,17 +65,10 @@ const UnifiedTracking = () => {
 
   const [trackingData, setTrackingData] = useState(null);
   const [isTracking, setIsTracking] = useState(true);
-  const [currentStatus, setCurrentStatus] = useState('pending');
-  const [eta, setEta] = useState(0);
-  const [progress, setProgress] = useState(0);
-  const [driverPosition, setDriverPosition] = useState([0, 0]);
-  
-  // Driver tracking states
-  const [driverAltitude, setDriverAltitude] = useState(0);
-  const [driverSpeed, setDriverSpeed] = useState(0);
-  const [weatherCondition, setWeatherCondition] = useState('clear');
-  const [routePath, setRoutePath] = useState([]);
-  const [driverTrail, setDriverTrail] = useState([]);
+  const [currentStatus, setCurrentStatus] = useState('in_transit');
+  const [eta, setEta] = useState(25);
+  const [progress, setProgress] = useState(65);
+  const [driverPosition, setDriverPosition] = useState([13.0827, 80.2707]);
   const [userRole, setUserRole] = useState(null);
 
   // Load user role and tracking data
@@ -99,43 +81,224 @@ const UnifiedTracking = () => {
 
     // Get request ID from URL params or location state
     const requestId = location.state?.requestId || new URLSearchParams(location.search).get('requestId');
+    console.log('📍 Location state:', location.state);
+    console.log('📍 Request ID from location:', requestId);
+    
     if (requestId) {
+      console.log('🔄 Fetching tracking data for request ID:', requestId);
       fetchTrackingData(requestId);
+    } else {
+      console.log('🔄 No request ID, setting demo data');
+      // Set demo data for development
+      setDemoData();
     }
   }, [location]);
 
-  const fetchTrackingData = async (requestId) => {
+  // Initialize map when tracking data is available
+  useEffect(() => {
+    console.log('Map initialization effect triggered:', { trackingData, mapRef: mapRef.current, mapInstance: mapInstanceRef.current });
+    if (trackingData && mapRef.current && !mapInstanceRef.current) {
+      console.log('Initializing map with data:', trackingData);
+      // Add a small delay to ensure DOM is ready
+      setTimeout(() => {
+        initializeMap(trackingData);
+      }, 100);
+    }
+  }, [trackingData]);
+
+  const setDemoData = () => {
+    console.log('🔄 Setting demo data for tracking');
+    
+    // Check if there's an active route from the current user's routes
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      const user = JSON.parse(userData);
+      console.log('👤 Current user:', user);
+      
+      // Try to fetch active routes from API
+      fetchActiveRoutes(user);
+    } else {
+      console.log('❌ No user data found');
+      setTrackingData(null);
+      setCurrentStatus('waiting');
+    }
+  };
+
+  const fetchActiveRoutes = async (user) => {
     try {
-      const response = await fetch(`${API_BASE}/routes/tracking/${requestId}`, {
+      console.log('🔄 Fetching active routes for user:', user);
+      
+      const response = await fetch('/api/routes', {
         credentials: 'include'
       });
       
       if (response.ok) {
-        const data = await response.json();
+        const routes = await response.json();
+        console.log('📡 API routes received:', routes);
+        
+        // Find active routes for this user
+        let activeRoutes = [];
+        if (user.role === 'driver') {
+          activeRoutes = routes.filter(route => route.status === 'active');
+        } else if (user.role === 'hospital') {
+          // Get routes for hospital's requests
+          const hospitalRequests = await fetch('/api/emergency_requests', {
+            credentials: 'include'
+          });
+          if (hospitalRequests.ok) {
+            const requests = await hospitalRequests.json();
+            const requestIds = requests.map(req => req.id);
+            activeRoutes = routes.filter(route => 
+              requestIds.includes(route.request_id) && route.status === 'active'
+            );
+          }
+        } else if (user.role === 'blood_bank') {
+          // Get routes for blood bank's approved requests
+          const bloodBankRequests = await fetch('/api/emergency_requests', {
+            credentials: 'include'
+          });
+          if (bloodBankRequests.ok) {
+            const requests = await bloodBankRequests.json();
+            const requestIds = requests.map(req => req.id);
+            activeRoutes = routes.filter(route => 
+              requestIds.includes(route.request_id) && route.status === 'active'
+            );
+          }
+        }
+        
+        console.log('🚚 Active routes found:', activeRoutes);
+        
+        if (activeRoutes.length > 0) {
+          const activeRoute = activeRoutes[0]; // Use first active route
+          console.log('✅ Using active route:', activeRoute);
+          
+          // Transform API route data to tracking format
+          const routeData = {
+            id: activeRoute.id,
+            blood_type: activeRoute.request?.blood_type || 'Unknown',
+            quantity_ml: activeRoute.request?.quantity_ml || 0,
+            source: {
+              name: activeRoute.blood_bank?.name || 'Blood Bank',
+              latitude: activeRoute.start_latitude,
+              longitude: activeRoute.start_longitude
+            },
+            destination: {
+              name: activeRoute.hospital?.name || 'Hospital',
+              latitude: activeRoute.end_latitude,
+              longitude: activeRoute.end_longitude
+            },
+            driver: {
+              name: activeRoute.driver_name || 'Driver',
+              phone: '+91-98765-43210',
+              vehicle_number: 'TN-01-AB-1234'
+            },
+            status: activeRoute.status,
+            eta_minutes: activeRoute.eta_minutes || 25,
+            progress: 0,
+            distance_km: activeRoute.distance_km || 0,
+            created_at: activeRoute.created_at
+          };
+          
+          console.log('Route data set:', routeData);
+          setTrackingData(routeData);
+          setCurrentStatus('in_transit');
+          setEta(routeData.eta_minutes);
+          setProgress(0);
+        } else {
+          console.log('❌ No active routes found');
+          setTrackingData(null);
+          setCurrentStatus('waiting');
+        }
+      } else {
+        console.log('❌ Failed to fetch routes from API');
+        setTrackingData(null);
+        setCurrentStatus('waiting');
+      }
+    } catch (error) {
+      console.error('❌ Error fetching active routes:', error);
+      setTrackingData(null);
+      setCurrentStatus('waiting');
+    }
+  };
+
+  const fetchTrackingData = async (requestId) => {
+    try {
+      console.log('🔄 Fetching tracking data for request:', requestId);
+      
+      // Fetch route data from API
+      const response = await fetch(`/api/routes/tracking/${requestId}`, {
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const routeData = await response.json();
+        console.log('✅ Found route data from API:', routeData);
+        
+        // Transform the API data to tracking format
+        const data = {
+          id: routeData.route?.id || requestId,
+          blood_type: routeData.request?.blood_type || 'Unknown',
+          quantity_ml: routeData.request?.quantity_ml || 0,
+          source: {
+            name: routeData.locations?.start?.name || 'Blood Bank',
+            latitude: routeData.locations?.start?.latitude || 0,
+            longitude: routeData.locations?.start?.longitude || 0
+          },
+          destination: {
+            name: routeData.locations?.end?.name || 'Hospital',
+            latitude: routeData.locations?.end?.latitude || 0,
+            longitude: routeData.locations?.end?.longitude || 0
+          },
+          driver: {
+            name: routeData.driver?.name || 'Driver',
+            phone: routeData.driver?.phone || '+91-98765-43210',
+            vehicle_number: routeData.driver?.vehicle_number || 'TN-01-AB-1234'
+          },
+          status: routeData.route?.status || 'active',
+          eta_minutes: routeData.route?.eta_minutes || 25,
+          progress: 0,
+          distance_km: routeData.route?.distance_km || 0,
+          created_at: routeData.route?.created_at
+        };
+        
         setTrackingData(data);
-        setCurrentStatus(data.route.status);
-        setEta(data.route.eta_minutes);
+        setCurrentStatus(data.status || 'in_transit');
+        setEta(data.eta_minutes || 25);
+        setProgress(0);
         
         // Initialize map with route data
         initializeMap(data);
         
-        // Start real-time tracking
+        // Start real-time tracking (simulated)
         startRealTimeTracking(requestId);
       } else {
-        console.error('Failed to fetch tracking data');
+        console.log('❌ No active route found, using demo data');
+        setDemoData();
       }
     } catch (error) {
       console.error('Error fetching tracking data:', error);
+      setDemoData();
     }
   };
 
   const initializeMap = (data) => {
     if (!mapRef.current || mapInstanceRef.current) return;
 
+    // Use the correct data structure from our demo data
+    const startLat = data.source?.latitude || data.locations?.start?.latitude;
+    const startLng = data.source?.longitude || data.locations?.start?.longitude;
+    const endLat = data.destination?.latitude || data.locations?.end?.latitude;
+    const endLng = data.destination?.longitude || data.locations?.end?.longitude;
+
+    if (!startLat || !startLng || !endLat || !endLng) {
+      console.error('Missing coordinates for map initialization');
+      return;
+    }
+
     const map = L.map(mapRef.current).setView([
-      (data.locations.start.latitude + data.locations.end.latitude) / 2,
-      (data.locations.start.longitude + data.locations.end.longitude) / 2
-    ], 12);
+      (startLat + endLat) / 2,
+      (startLng + endLng) / 2
+    ], 13);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'
@@ -144,30 +307,30 @@ const UnifiedTracking = () => {
     mapInstanceRef.current = map;
 
     // Add markers
-    const startMarker = L.marker([data.locations.start.latitude, data.locations.start.longitude], { icon: bloodBankIcon })
+    const startMarker = L.marker([startLat, startLng], { icon: bloodBankIcon })
       .addTo(map)
-      .bindPopup(`<b>${data.locations.start.name}</b><br>${data.locations.start.address}`);
+      .bindPopup(`<b>${data.source?.name || data.locations?.start?.name}</b><br>${data.source?.address || data.locations?.start?.address}`);
 
-    const endMarker = L.marker([data.locations.end.latitude, data.locations.end.longitude], { icon: hospitalIcon })
+    const endMarker = L.marker([endLat, endLng], { icon: hospitalIcon })
       .addTo(map)
-      .bindPopup(`<b>${data.locations.end.name}</b><br>${data.locations.end.address}`);
+      .bindPopup(`<b>${data.destination?.name || data.locations?.end?.name}</b><br>${data.destination?.address || data.locations?.end?.address}`);
 
     // Add driver marker at start position
-    driverMarkerRef.current = L.marker([data.locations.start.latitude, data.locations.start.longitude], { icon: driverIcon })
+    driverMarkerRef.current = L.marker([startLat, startLng], { icon: driverIcon })
       .addTo(map)
       .bindPopup(`<b>${data.driver.name}</b><br>Vehicle: ${data.driver.vehicle_number}`);
 
     // Draw route line
     const routeCoordinates = [
-      [data.locations.start.latitude, data.locations.start.longitude],
-      [data.locations.end.latitude, data.locations.end.longitude]
+      [startLat, startLng],
+      [endLat, endLng]
     ];
 
     routeLineRef.current = L.polyline(routeCoordinates, {
       color: '#3b82f6',
-      weight: 4,
+      weight: 6,
       opacity: 0.8,
-      dashArray: '10, 10'
+      dashArray: '15, 10'
     }).addTo(map);
 
     // Fit map to show entire route
@@ -175,131 +338,199 @@ const UnifiedTracking = () => {
   };
 
   const startRealTimeTracking = (requestId) => {
-    // Simulate real-time updates every 5 seconds
+    console.log('🚀 Starting real-time tracking simulation for request:', requestId);
+    
+    // Simulate real-time updates every 3 seconds
     const interval = setInterval(async () => {
       if (!isTracking) {
+        console.log('🛑 Tracking stopped, clearing interval');
         clearInterval(interval);
         return;
       }
 
       try {
-        // Fetch updated tracking data
-        const response = await fetch(`${API_BASE}/routes/tracking/${requestId}`, {
-          credentials: 'include'
-        });
+        // For demo purposes, simulate progress updates instead of API calls
+        console.log('🔄 Simulating tracking update...');
         
-        if (response.ok) {
-          const data = await response.json();
-          updateTrackingDisplay(data);
+        // Get current route data from localStorage
+        const assignedRoutes = JSON.parse(localStorage.getItem('assignedRoutes') || '[]');
+        const activeRoute = assignedRoutes.find(route => route.id === requestId && route.status === 'in_transit');
+        
+        if (activeRoute) {
+          // Simulate progress increase
+          const currentProgress = progress;
+          const newProgress = Math.min(currentProgress + Math.random() * 5, 100); // Random progress increase
+          
+          setProgress(newProgress);
+          
+          // Simulate ETA decrease
+          const currentEta = eta;
+          const newEta = Math.max(currentEta - Math.random() * 2, 1); // Random ETA decrease
+          setEta(Math.round(newEta));
+          
+          console.log(`📊 Progress: ${newProgress.toFixed(1)}%, ETA: ${Math.round(newEta)} min`);
         }
       } catch (error) {
         console.error('Error updating tracking:', error);
       }
-    }, 5000);
+    }, 3000);
 
     return () => clearInterval(interval);
   };
 
   const updateTrackingDisplay = (data) => {
-    setCurrentStatus(data.route.status);
-    setProgress(data.tracking.progress_percentage);
+    // For demo purposes, we're handling updates in startRealTimeTracking
+    // This function is kept for compatibility but not actively used
+    console.log('📊 updateTrackingDisplay called with:', data);
     
-    // Update driver position if route is active
-    if (data.route.status === 'active' && data.tracking.track_points.length > 0) {
-      const latestPoint = data.tracking.track_points[data.tracking.track_points.length - 1];
-      const newPosition = [latestPoint.latitude, latestPoint.longitude];
-      
-      setDriverPosition(newPosition);
-      
-      // Update driver marker on map
-      if (driverMarkerRef.current && mapInstanceRef.current) {
-        driverMarkerRef.current.setLatLng(newPosition);
-        
-        // Add to driver trail
-        setDriverTrail(prev => [...prev, newPosition]);
-        
-        // Update route line to show actual path
-        if (driverTrail.length > 1) {
-          const actualPath = [...driverTrail, newPosition];
-          if (routeLineRef.current) {
-            routeLineRef.current.setLatLngs(actualPath);
-          }
-        }
-      }
+    if (data.route?.status) {
+      setCurrentStatus(data.route.status);
+    }
+    if (data.route?.eta_minutes) {
+      setEta(data.route.eta_minutes);
+    }
+    if (data.route?.progress) {
+      setProgress(data.route.progress);
+    }
+    
+    // Update driver position on map if available
+    if (driverMarkerRef.current && data.driver?.current_position) {
+      const newPos = [data.driver.current_position.latitude, data.driver.current_position.longitude];
+      driverMarkerRef.current.setLatLng(newPos);
+      setDriverPosition(newPos);
     }
   };
 
-  const handleStartRoute = async () => {
-    if (!trackingData) return;
-    
-    try {
-      const response = await fetch(`${API_BASE}/routes/${trackingData.route.id}/start`, {
-        method: 'POST',
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        setCurrentStatus('active');
-        // Refresh tracking data
-        fetchTrackingData(trackingData.request.id);
-      }
-    } catch (error) {
-      console.error('Error starting route:', error);
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'completed':
+        return 'bg-green-100 text-green-800';
+      case 'in_transit':
+        return 'bg-blue-100 text-blue-800';
+      case 'dispatched':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'pending':
+        return 'bg-gray-100 text-gray-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const handleCompleteRoute = async () => {
-    if (!trackingData) return;
-    
-    try {
-      const response = await fetch(`${API_BASE}/routes/${trackingData.route.id}/complete`, {
-        method: 'POST',
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        setCurrentStatus('completed');
-        setProgress(100);
-        // Refresh tracking data
-        fetchTrackingData(trackingData.request.id);
-      }
-    } catch (error) {
-      console.error('Error completing route:', error);
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case 'completed':
+        return <CheckCircle className="w-4 h-4" />;
+      case 'in_transit':
+        return <Truck className="w-4 h-4" />;
+      case 'dispatched':
+        return <Package className="w-4 h-4" />;
+      case 'pending':
+        return <Clock className="w-4 h-4" />;
+      default:
+        return <Circle className="w-4 h-4" />;
     }
   };
 
-  const handleProgressUpdate = async () => {
-    if (!trackingData) return;
-    
-    try {
-      const response = await fetch(`${API_BASE}/routes/${trackingData.route.id}/progress`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          latitude: driverPosition[0],
-          longitude: driverPosition[1]
-        })
-      });
-      
-      if (response.ok) {
-        // Refresh tracking data
-        fetchTrackingData(trackingData.request.id);
-      }
-    } catch (error) {
-      console.error('Error updating progress:', error);
+  const getRoleSpecificInfo = () => {
+    if (!trackingData || !userRole) return null;
+
+    switch (userRole) {
+      case 'hospital':
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Blood Type</span>
+              <div className="flex items-center space-x-2">
+                <Heart className="w-5 h-5 text-red-500" />
+                <span className="font-semibold text-lg">{trackingData.blood_type}</span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Quantity</span>
+              <span className="font-semibold">{trackingData.quantity_ml}ml</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Blood Bank</span>
+              <span className="font-semibold text-sm">{trackingData.source.name}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">ETA</span>
+              <span className="font-semibold text-blue-600">{eta} min</span>
+            </div>
+          </div>
+        );
+
+      case 'blood_bank':
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Hospital</span>
+              <span className="font-semibold text-sm">{trackingData.destination.name}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Blood Unit</span>
+              <div className="flex items-center space-x-2">
+                <Heart className="w-4 h-4 text-red-500" />
+                <span className="font-semibold">{trackingData.blood_type} - {trackingData.quantity_ml}ml</span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Driver</span>
+              <span className="font-semibold">{trackingData.driver.name}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Status</span>
+              <Badge className={getStatusColor(currentStatus)}>
+                {getStatusIcon(currentStatus)}
+                <span className="ml-1 capitalize">{currentStatus.replace('_', ' ')}</span>
+              </Badge>
+            </div>
+          </div>
+        );
+
+      case 'driver':
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Hospital</span>
+              <span className="font-semibold text-sm">{trackingData.destination.name}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Blood Type</span>
+              <div className="flex items-center space-x-2">
+                <Heart className="w-4 h-4 text-red-500" />
+                <span className="font-semibold">{trackingData.blood_type}</span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Time Remaining</span>
+              <span className="font-semibold text-red-600">{eta} min</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Distance</span>
+              <span className="font-semibold">{trackingData.distance_km} km</span>
+            </div>
+          </div>
+        );
+
+      default:
+        return null;
     }
   };
 
   if (!trackingData) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">No Tracking Data</h2>
-            <p className="text-gray-600">Please select an emergency request to track.</p>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <MapPin className="w-8 h-8 text-blue-600" />
+          </div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Waiting for Route to Start</h2>
+          <p className="text-gray-600 mb-4">No active delivery route found.</p>
+          <div className="text-sm text-gray-500">
+            <p>• Hospital must order blood and get approval</p>
+            <p>• Blood bank must approve the request</p>
+            <p>• Driver must click "Start Route" to begin tracking</p>
           </div>
         </div>
       </div>
@@ -307,192 +538,121 @@ const UnifiedTracking = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Emergency Blood Delivery Tracking</h1>
-            <p className="text-gray-600">Live tracking of emergency blood delivery via ground transport</p>
-          </div>
-          <div className="text-right">
-            <div className="text-lg font-semibold text-gray-900">
-              {trackingData.locations.end.name}
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white shadow-sm border-b px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(-1)}
+              className="p-2"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <div>
+              <h1 className="text-lg font-semibold text-gray-900">Live Tracking</h1>
+              <p className="text-sm text-gray-600">Transfer #{trackingData.id}</p>
             </div>
-            <div className="text-sm text-gray-600">
-              {trackingData.locations.end.address}
-            </div>
           </div>
+          
+          <Badge className={getStatusColor(currentStatus)}>
+            {getStatusIcon(currentStatus)}
+            <span className="ml-1 capitalize">{currentStatus.replace('_', ' ')}</span>
+          </Badge>
         </div>
+      </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Map Section */}
-          <div className="lg:col-span-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MapPin className="w-5 h-5 text-blue-600" />
-                  Live Delivery Route
-                </CardTitle>
-                <CardDescription>
-                  Real-time tracking of the delivery vehicle
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div 
-                  ref={mapRef} 
-                  className="w-full h-96 rounded-lg border"
-                  style={{ minHeight: '400px' }}
-                ></div>
-              </CardContent>
-            </Card>
+      <div className="flex h-[calc(100vh-80px)]">
+        {/* Map Section - Takes most of the screen */}
+        <div className="flex-1 relative">
+          <div 
+            ref={mapRef} 
+            className="w-full h-full map-wrapper"
+            style={{ minHeight: '600px', height: '100%' }}
+          >
+            {/* Fallback content if map doesn't load */}
+            {!mapInstanceRef.current && (
+              <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p className="text-gray-600">Loading map...</p>
+                </div>
+              </div>
+            )}
           </div>
+      
+      {/* Progress Bar Overlay */}
+      <div className="absolute bottom-4 left-4 right-4">
+        <Card className="bg-white/95 backdrop-blur-sm">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-gray-700">Delivery Progress</span>
+              <span className="text-sm font-medium text-blue-600">{progress}%</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div 
+                className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+                style={{ width: `${progress}%` }}
+              ></div>
+            </div>
+            <div className="flex items-center justify-between mt-2">
+              <span className="text-xs text-gray-500">{trackingData.source.name}</span>
+              <span className="text-xs text-gray-500">{trackingData.destination.name}</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
 
-          {/* Tracking Details */}
-          <div className="space-y-6">
-            {/* Blood Transfer Details */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Heart className="w-5 h-5 text-red-600" />
-                  Blood Transfer Details
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-sm text-gray-600">Blood Type</div>
-                    <div className="font-semibold">{trackingData.request.blood_type}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-600">Quantity</div>
-                    <div className="font-semibold">{trackingData.request.quantity_ml}ml</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-600">Distance</div>
-                    <div className="font-semibold">{trackingData.route.distance_km} km</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-600">ETA</div>
-                    <div className="font-semibold">{trackingData.route.eta_minutes} min</div>
-                  </div>
-                </div>
-                
-                <div>
-                  <div className="text-sm text-gray-600 mb-2">Delivery Progress</div>
-                  <div className="w-full bg-gray-200 rounded-full h-3">
-                    <div 
-                      className="bg-blue-600 h-3 rounded-full transition-all duration-500"
-                      style={{ width: `${progress}%` }}
-                    ></div>
-                  </div>
-                  <div className="text-sm text-gray-600 mt-1">{progress.toFixed(1)}% Complete</div>
-                </div>
-              </CardContent>
-            </Card>
+        {/* Info Panel - Compact and clean */}
+        <div className="w-80 bg-white border-l border-gray-200 overflow-y-auto">
+          <div className="p-6 space-y-6">
+            {/* Role-specific Information */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                {userRole === 'hospital' && 'Delivery Details'}
+                {userRole === 'blood_bank' && 'Transfer Status'}
+                {userRole === 'driver' && 'Route Info'}
+              </h3>
+              {getRoleSpecificInfo()}
+            </div>
 
             {/* Driver Information */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="w-5 h-5 text-green-600" />
-                  Driver Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Name:</span>
-                  <span className="font-medium">{trackingData.driver.name}</span>
+            <div className="pt-4 border-t border-gray-200">
+              <h4 className="font-medium text-gray-900 mb-3">Driver Details</h4>
+              <div className="space-y-3">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                    <User className="w-5 h-5 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">{trackingData.driver.name}</p>
+                    <p className="text-sm text-gray-500">{trackingData.driver.vehicle_number}</p>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Vehicle:</span>
-                  <span className="font-medium">{trackingData.driver.vehicle_number}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Phone:</span>
-                  <span className="font-medium">{trackingData.driver.phone}</span>
-                </div>
-              </CardContent>
-            </Card>
+                <Button variant="outline" size="sm" className="w-full">
+                  <Phone className="w-4 h-4 mr-2" />
+                  Call Driver
+                </Button>
+              </div>
+            </div>
 
-            {/* System Status */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Navigation className="w-5 h-5 text-purple-600" />
-                  System Status
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Status:</span>
-                  <Badge variant={currentStatus === 'completed' ? 'default' : 'secondary'}>
-                    {currentStatus.toUpperCase()}
-                  </Badge>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Speed:</span>
-                  <span className="font-medium">{driverSpeed} km/h</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Weather:</span>
-                  <span className="font-medium capitalize">{weatherCondition}</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Action Buttons */}
-            {userRole === 'driver' && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Driver Actions</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {currentStatus === 'pending' && (
-                    <Button 
-                      onClick={handleStartRoute}
-                      className="w-full bg-green-600 hover:bg-green-700"
-                    >
-                      Start Route
-                    </Button>
-                  )}
-                  
-                  {currentStatus === 'active' && (
-                    <>
-                      <Button 
-                        onClick={handleProgressUpdate}
-                        variant="outline"
-                        className="w-full"
-                      >
-                        Update Progress
-                      </Button>
-                      <Button 
-                        onClick={handleCompleteRoute}
-                        className="w-full bg-blue-600 hover:bg-blue-700"
-                      >
-                        Complete Delivery
-                      </Button>
-                    </>
-                  )}
-                  
-                  {currentStatus === 'completed' && (
-                    <div className="text-center text-green-600 font-medium">
-                      ✅ Delivery Completed!
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Refresh Button */}
-            <Button 
-              onClick={() => fetchTrackingData(trackingData.request.id)}
-              variant="outline"
-              className="w-full"
-            >
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Refresh Tracking
-            </Button>
+            {/* Quick Actions */}
+            <div className="pt-4 border-t border-gray-200">
+              <h4 className="font-medium text-gray-900 mb-3">Quick Actions</h4>
+              <div className="space-y-2">
+                <Button variant="outline" size="sm" className="w-full">
+                  <Navigation className="w-4 h-4 mr-2" />
+                  Get Directions
+                </Button>
+                <Button variant="outline" size="sm" className="w-full">
+                  <Package className="w-4 h-4 mr-2" />
+                  View Details
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

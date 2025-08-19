@@ -61,6 +61,10 @@ def initialize_database():
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
+    # Skip API routes - let them be handled by blueprints
+    if path.startswith('api/'):
+        return "API endpoint not found", 404
+        
     static_folder_path = app.static_folder
     if static_folder_path is None:
             return "Static folder not configured", 404

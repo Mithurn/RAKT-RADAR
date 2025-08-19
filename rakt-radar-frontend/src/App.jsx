@@ -5,6 +5,7 @@ import Dashboard from './components/Dashboard';
 import BloodManagement from './components/BloodManagement';
 import SmartRouting from './components/SmartRouting';
 import UnifiedTracking from './components/UnifiedTracking';
+import TrackingDashboard from './components/TrackingDashboard';
 import Navigation from './components/Navigation';
 import BloodBankDashboard from './components/BloodBank/BloodBankDashboard';
 import DriverRoutes from './components/Driver/DriverRoutes';
@@ -140,7 +141,7 @@ function App() {
           <Route 
             path="/tracking" 
             element={
-              <ProtectedRoute allowedRoles={['hospital', 'admin']}>
+              <ProtectedRoute allowedRoles={['hospital', 'blood_bank', 'driver', 'admin']}>
                 <UnifiedTracking />
               </ProtectedRoute>
             } 
@@ -152,6 +153,14 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={['blood_bank', 'admin']}>
                 <BloodBankDashboard />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/blood-bank/inventory" 
+            element={
+              <ProtectedRoute allowedRoles={['blood_bank', 'admin']}>
+                <BloodManagement />
               </ProtectedRoute>
             } 
           />

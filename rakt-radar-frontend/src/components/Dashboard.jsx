@@ -3,7 +3,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
-
 import { 
   Activity, 
   AlertTriangle, 
@@ -17,7 +16,7 @@ import {
 import { Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = '/api';
 
 const Dashboard = () => {
   const [analytics, setAnalytics] = useState({});
@@ -206,6 +205,8 @@ const Dashboard = () => {
 
 
 
+
+
         {/* Key Metrics */}
         {analytics && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -239,6 +240,35 @@ const Dashboard = () => {
             />
           </div>
         )}
+
+        {/* Live Tracking Access */}
+        <div className="mb-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <MapPin className="h-5 w-5 text-blue-600" />
+                <span>Live Blood Delivery Tracking</span>
+              </CardTitle>
+              <CardDescription>
+                Monitor active blood delivery routes in real-time
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  View live tracking of blood units being delivered to hospitals
+                </div>
+                <Button 
+                  onClick={() => window.location.href = '/tracking'}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  <MapPin className="h-4 w-4 mr-2" />
+                  View Live Tracking
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Main Content - Overview Only */}
         <div className="space-y-6">

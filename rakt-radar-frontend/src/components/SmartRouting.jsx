@@ -53,6 +53,9 @@ const SmartRouting = () => {
   
   // Transfer Tracking States
 
+  // Route Start Notification System
+  const [routeNotifications, setRouteNotifications] = useState([]);
+  const [showRouteNotification, setShowRouteNotification] = useState(false);
   
   // Ref to track processed matches and prevent duplicate alerts
   const processedMatchesRef = useRef(new Set());
@@ -85,6 +88,46 @@ const SmartRouting = () => {
       console.log('Default hospital set:', defaultHospital);
     }
   }, [hospitals, emergencyRequest.hospital_id]);
+
+  // Monitor for route start notifications and redirect to tracking
+  useEffect(() => {
+    const checkRouteNotifications = () => {
+      const notifications = JSON.parse(localStorage.getItem('routeNotifications') || '[]');
+      const activeNotifications = notifications.filter(n => 
+        n.status === 'active' && 
+        n.type === 'route_started' &&
+        new Date(n.timestamp) > new Date(Date.now() - 60000) // Only notifications from last minute
+      );
+      
+      if (activeNotifications.length > 0) {
+        const latestNotification = activeNotifications[activeNotifications.length - 1];
+        console.log('🏥 Hospital - Route start notification detected:', latestNotification);
+        
+        // Show notification to user
+        setRouteNotifications(activeNotifications);
+        setShowRouteNotification(true);
+        
+        // Auto-redirect to tracking after 3 seconds
+        setTimeout(() => {
+          console.log('🏥 Hospital - Auto-redirecting to tracking page...');
+          
+          // Mark notification as processed
+          const updatedNotifications = notifications.map(n => 
+            n.id === latestNotification.id ? { ...n, status: 'processed' } : n
+          );
+          localStorage.setItem('routeNotifications', JSON.stringify(updatedNotifications));
+          
+          navigate('/tracking');
+        }, 3000);
+      }
+    };
+
+    // Check immediately and then every 2 seconds
+    checkRouteNotifications();
+    const interval = setInterval(checkRouteNotifications, 2000);
+    
+    return () => clearInterval(interval);
+  }, [navigate]);
 
   useEffect(() => {
     console.log('SmartRouting - State updated:', {
@@ -282,6 +325,55 @@ const SmartRouting = () => {
     }
   };
 
+  const handleOrderBlood = async (bloodUnit) => {
+    try {
+      setIsProcessing(true);
+      
+      // Create blood request object
+      const bloodRequest = {
+        id: generateUniqueId(),
+        blood_type: bloodUnit.blood_type,
+        quantity_ml: bloodUnit.quantity_ml,
+        urgency: emergencyRequest.urgency,
+        hospital_id: emergencyRequest.hospital_id,
+        hospital_name: hospitals.find(h => h.id === emergencyRequest.hospital_id)?.name || 'Unknown Hospital',
+        blood_bank_id: bloodUnit.source_bank_id || 'demo_bank_1',
+        blood_bank_name: bloodUnit.source_bank || 'Chennai Central Blood Bank',
+        status: 'pending_approval',
+        created_at: new Date().toISOString(),
+        distance_km: bloodUnit.distance,
+        estimated_time: bloodUnit.eta,
+        cost: Math.floor(bloodUnit.distance * 55)
+      };
+
+      // Store in localStorage for demo purposes
+      const existingRequests = JSON.parse(localStorage.getItem('bloodRequests') || '[]');
+      existingRequests.push(bloodRequest);
+      localStorage.setItem('bloodRequests', JSON.stringify(existingRequests));
+      
+      console.log('🏥 Hospital - Blood request created:', bloodRequest);
+      console.log('🏥 Hospital - All blood requests in localStorage:', existingRequests);
+
+      // Show success message
+      alert(`Blood request created successfully! Request ID: ${bloodRequest.id}\n\nStatus: Pending Blood Bank Approval\n\nYou will be notified once approved.`);
+      
+      // Reset form
+      setEmergencyRequest({
+        blood_type: '',
+        urgency: 'high',
+        hospital_id: emergencyRequest.hospital_id, // Keep hospital
+        quantity_needed: ''
+      });
+      setSelectedMatch(null);
+      
+    } catch (error) {
+      console.error('Error creating blood request:', error);
+      alert('Failed to create blood request. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const fetchMatches = async () => {
     try {
       const response = await fetch(`${API_BASE}/demand_matching`);
@@ -363,6 +455,97 @@ const SmartRouting = () => {
       
       const apiResponse = await response.json();
       console.log('✅ Emergency request created via API:', apiResponse);
+      
+      // ALSO store in localStorage so blood bank can see it
+      const bloodRequest = {
+        id: apiResponse.request?.id || generateUniqueId(),
+        blood_type: emergencyRequest.blood_type,
+        quantity_ml: parseInt(emergencyRequest.quantity_needed),
+        urgency: emergencyRequest.urgency || 'high',
+        hospital_id: emergencyRequest.hospital_id,
+        hospital: {
+          name: hospitals.find(h => h.id === emergencyRequest.hospital_id)?.name || 'Unknown Hospital',
+          city: hospitals.find(h => h.id === emergencyRequest.hospital_id)?.city || 'Unknown City'
+        },
+        blood_bank_id: apiResponse.suggested_bank?.id || '52421b7d-0ce1-4382-ba82-cf9af817761d',
+        blood_bank_name: apiResponse.suggested_bank?.name || 'SRM Blood Bank',
+        status: 'pending_approval',
+        created_at: new Date().toISOString(),
+        distance_km: apiResponse.distance_km || 0,
+        predicted_eta_minutes: parseInt(apiResponse.predicted_eta?.replace(' minutes', '') || '30'),
+        ml_confidence_score: parseFloat(apiResponse.ml_confidence?.replace('%', '') || '85'),
+        notes: emergencyRequest.notes || 'Emergency request from hospital'
+      };
+      
+                       // Store in localStorage for blood bank to see
+                 // Convert to the format that matches backend API response
+                 const apiFormatRequest = {
+                   id: bloodRequest.id,
+                   blood_type: bloodRequest.blood_type,
+                   quantity_ml: bloodRequest.quantity_ml,
+                   urgency: bloodRequest.urgency,
+                   status: bloodRequest.status,
+                   hospital_id: bloodRequest.hospital_id,
+                   suggested_bank_id: bloodRequest.blood_bank_id,
+                   ml_confidence_score: bloodRequest.ml_confidence_score,
+                   predicted_eta_minutes: bloodRequest.predicted_eta_minutes,
+                   created_at: bloodRequest.created_at,
+                   hospital: bloodRequest.hospital,
+                   suggested_bank: {
+                     id: bloodRequest.blood_bank_id,
+                     name: bloodRequest.blood_bank_name
+                   }
+                 };
+                 
+                 const existingRequests = JSON.parse(localStorage.getItem('bloodRequests') || '[]');
+                 existingRequests.push(apiFormatRequest);
+                 localStorage.setItem('bloodRequests', JSON.stringify(existingRequests));
+      
+      // Dispatch custom event to notify blood bank dashboard
+      window.dispatchEvent(new CustomEvent('customStorageChange'));
+      
+      // Also try to notify other tabs using localStorage event
+      try {
+        localStorage.setItem('bloodRequestsUpdate', Date.now().toString());
+      } catch (e) {
+        console.log('Could not update localStorage for cross-tab notification');
+      }
+      
+      // Try BroadcastChannel API for cross-tab communication
+      try {
+        if (window.BroadcastChannel) {
+          const channel = new BroadcastChannel('rakt-radar-updates');
+          channel.postMessage({
+            type: 'new_blood_request',
+            requestId: bloodRequest.id,
+            timestamp: Date.now()
+          });
+          console.log('📡 BroadcastChannel message sent to other tabs');
+        }
+      } catch (e) {
+        console.log('Could not use BroadcastChannel:', e);
+      }
+      
+      console.log('🏥 Hospital - Blood request also stored in localStorage:', bloodRequest);
+      console.log('🏥 Hospital - All blood requests in localStorage:', existingRequests);
+      
+      // Create notification for blood bank
+      const notification = {
+        id: generateUniqueId(),
+        type: 'new_blood_request',
+        message: `New blood request: ${emergencyRequest.blood_type} blood needed`,
+        status: 'active',
+        timestamp: new Date().toISOString(),
+        request_id: bloodRequest.id,
+        blood_type: emergencyRequest.blood_type,
+        urgency: emergencyRequest.urgency
+      };
+      
+      const existingNotifications = JSON.parse(localStorage.getItem('routeNotifications') || '[]');
+      existingNotifications.push(notification);
+      localStorage.setItem('routeNotifications', JSON.stringify(existingNotifications));
+      
+      console.log('🔔 Notification created for blood bank:', notification);
       
       addLiveUpdate(`✅ Emergency request created successfully!`, 'success');
       
@@ -763,6 +946,36 @@ const SmartRouting = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Route Start Notification */}
+      {showRouteNotification && routeNotifications.length > 0 && (
+        <div className="fixed top-4 right-4 z-50 max-w-md">
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 shadow-lg">
+            <div className="flex items-start space-x-3">
+              <div className="flex-shrink-0">
+                <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                  <span className="text-green-600 text-sm">🚚</span>
+                </div>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-medium text-green-800">Blood Delivery Started!</h3>
+                <p className="text-sm text-green-700 mt-1">
+                  {routeNotifications[routeNotifications.length - 1]?.message || 'Driver has started the route'}
+                </p>
+                <p className="text-xs text-green-600 mt-2">
+                  Redirecting to live tracking in 3 seconds...
+                </p>
+              </div>
+              <button
+                onClick={() => setShowRouteNotification(false)}
+                className="text-green-400 hover:text-green-600"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <div className="flex items-center justify-between w-full">
@@ -1137,41 +1350,13 @@ const SmartRouting = () => {
                                       <div className="text-sm text-gray-600">
                                         <span className="font-medium text-blue-600">✓ Selected for transfer</span>
                                       </div>
-                                      <Button 
-                                        onClick={() => {
-                                          // Store transfer data in localStorage for future use
-                                          localStorage.setItem('currentTransfer', JSON.stringify(unit));
-                                          // Navigate to tracking page with transfer data
-                                          navigate('/tracking', {
-                                            state: {
-                                              transferData: {
-                                                ...unit,
-                                                cost: Math.floor(unit.distance * 55), // Slightly higher cost for drone delivery
-                                                status: 'dispatched',
-                                                delivery_method: 'drone', // Indicate this is drone delivery
-                                                estimated_time_hours: Math.max(0.25, unit.distance / 60), // Drone is 4x faster
-                                                coordinates: {
-                                                  source: unit.coordinates?.source || [13.0827, 80.2707], // Chennai Central Blood Bank coordinates
-                                                  destination: unit.coordinates?.destination || [13.0067, 80.2206], // Chennai coordinates
-                                                  current: unit.coordinates?.current || [13.0447, 80.2456] // Midpoint for drone start
-                                                },
-                                                drone_specs: {
-                                                  model: 'RAKT-DRONE-X1',
-                                                  max_payload: '500ml',
-                                                  max_range: '100km',
-                                                  max_speed: '60km/h',
-                                                  battery_capacity: '85%',
-                                                  weather_resistance: 'IP65'
-                                                }
-                                              }
-                                            } 
-                                          });
-                                        }}
+                                                                              <Button 
+                                        onClick={() => handleOrderBlood(unit)}
                                         disabled={isProcessing}
                                         className="bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 text-white"
                                       >
                                         <Truck className="w-4 h-4 mr-2" />
-                                        {isProcessing ? 'Processing...' : 'Track Transfer'}
+                                        {isProcessing ? 'Processing...' : 'Order Blood'}
                                       </Button>
                                       <div className="mt-1 text-xs text-green-600 text-center">
                                         Local network optimized

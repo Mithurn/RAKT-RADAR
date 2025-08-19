@@ -31,6 +31,8 @@ const DriverRoutes = () => {
   const [notificationMessage, setNotificationMessage] = useState('');
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [routeTrackingData, setRouteTrackingData] = useState(null);
+  const [routeNotifications, setRouteNotifications] = useState([]);
+  const [showRouteNotification, setShowRouteNotification] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -52,40 +54,111 @@ const DriverRoutes = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Monitor for route start notifications (for when driver starts their own route)
+  useEffect(() => {
+    const checkRouteNotifications = () => {
+      const notifications = JSON.parse(localStorage.getItem('routeNotifications') || '[]');
+      const activeNotifications = notifications.filter(n => 
+        n.status === 'active' && 
+        n.type === 'route_started' &&
+        new Date(n.timestamp) > new Date(Date.now() - 60000) // Only notifications from last minute
+      );
+      
+      if (activeNotifications.length > 0) {
+        const latestNotification = activeNotifications[activeNotifications.length - 1];
+        console.log('🚚 Driver - Route start notification detected:', latestNotification);
+        
+        // Show notification to driver
+        setRouteNotifications(activeNotifications);
+        setShowRouteNotification(true);
+        
+        // Auto-redirect to tracking after 2 seconds (driver should be faster)
+        setTimeout(() => {
+          console.log('🚚 Driver - Auto-redirecting to tracking page...');
+          
+          // Mark notification as processed
+          const updatedNotifications = notifications.map(n => 
+            n.id === latestNotification.id ? { ...n, status: 'processed' } : n
+          );
+          localStorage.setItem('routeNotifications', JSON.stringify(updatedNotifications));
+          
+          navigate('/tracking');
+        }, 2000);
+      }
+    };
+
+    // Check immediately and then every 2 seconds
+    checkRouteNotifications();
+    const interval = setInterval(checkRouteNotifications, 2000);
+    
+    return () => clearInterval(interval);
+  }, [navigate]);
+
   const fetchData = async () => {
     try {
       setIsLoading(true);
       
-      console.log('🚚 Driver fetching routes...');
+      console.log('🚚 Driver fetching routes from API...');
+      
+      // Fetch routes from API
       const response = await fetch(`${API_BASE}/routes`, {
         credentials: 'include'
       });
-
-      if (response.ok) {
-        const routesData = await response.json();
-        console.log('📡 Driver routes response:', routesData);
-        
-        // Check if there are new pending routes (notifications)
-        const newPendingRoutes = routesData.filter(route => 
-          route.status === 'pending' && 
-          !routes.some(existingRoute => existingRoute.id === route.id)
-        );
-        
-        if (newPendingRoutes.length > 0) {
-          setNotificationMessage(`🚚 New route assigned! You have ${newPendingRoutes.length} new delivery request(s)`);
-          setShowNotification(true);
-        }
-        
-        setRoutes(routesData);
-      } else {
-        console.error('❌ Failed to fetch routes:', response.status);
-        const errorData = await response.json();
-        console.error('Error details:', errorData);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-
+      
+      const apiRoutes = await response.json();
+      console.log('📡 API routes received:', apiRoutes);
+      
+      // Transform API routes to match expected format
+      const transformedRoutes = apiRoutes.map(route => ({
+        id: route.id,
+        status: route.status,
+        driver: { name: route.driver_name },
+        start: {
+          latitude: route.start_latitude,
+          longitude: route.start_longitude,
+          name: route.blood_bank?.name || 'Blood Bank'
+        },
+        destination: {
+          latitude: route.end_latitude,
+          longitude: route.end_longitude,
+          name: route.hospital?.name || 'Hospital'
+        },
+        distance_km: route.distance_km,
+        eta_minutes: route.eta_minutes,
+        created_at: route.created_at,
+        started_at: route.started_at,
+        request: route.request
+      }));
+      
+      console.log('🚚 Transformed routes:', transformedRoutes);
+      
+      // Check if there are new pending routes (notifications)
+      const newPendingRoutes = transformedRoutes.filter(route => 
+        route.status === 'pending' && 
+        !routes.some(existingRoute => existingRoute.id === route.id)
+      );
+      
+      if (newPendingRoutes.length > 0) {
+        setNotificationMessage(`🚚 New route assigned! You have ${newPendingRoutes.length} new delivery request(s)`);
+        setShowNotification(true);
+      }
+      
+      setRoutes(transformedRoutes);
       setLastUpdated(new Date());
     } catch (error) {
       console.error('❌ Error fetching routes:', error);
+      
+      // Fallback to localStorage if API fails
+      console.log('🔄 Falling back to localStorage routes...');
+      const assignedRoutes = JSON.parse(localStorage.getItem('assignedRoutes') || '[]');
+      const driverAssignedRoutes = assignedRoutes.filter(route => 
+        route.driver.name === (user?.name || 'demo_driver')
+      );
+      setRoutes(driverAssignedRoutes);
     } finally {
       setIsLoading(false);
     }
@@ -93,29 +166,83 @@ const DriverRoutes = () => {
 
   const handleStartRoute = async (routeId) => {
     try {
+      // Find the route in current routes state
+      const currentRoute = routes.find(route => route.id === routeId);
+      
+      if (!currentRoute) {
+        console.error('❌ Route not found:', routeId);
+        return;
+      }
+      
+      console.log('🚚 Starting route:', currentRoute);
+      
+      // Call API to start the route
       const response = await fetch(`${API_BASE}/routes/${routeId}/start`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
         credentials: 'include'
       });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log('✅ Route start result:', result);
-        
-        if (result.message === 'Route is already active') {
-          // Route is already active, just refresh the data
-          alert('Route is already active!');
-        } else {
-          alert('Route started successfully!');
-        }
-        
-        // Refresh data
-        fetchData();
-      } else {
-        const error = await response.json();
-        console.error('❌ Route start error:', error);
-        alert(`Error: ${error.error}`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to start route: ${response.status}`);
       }
+      
+      const result = await response.json();
+      console.log('🚚 Route start API response:', result);
+      
+      // Update local state
+      const updatedRoutes = routes.map(route => {
+        if (route.id === routeId) {
+          return { ...route, status: 'active', started_at: new Date().toISOString() };
+        }
+        return route;
+      });
+      setRoutes(updatedRoutes);
+      
+      // Create a route start notification for ALL users (Hospital, Blood Bank, Driver)
+      const routeStartNotification = {
+        id: `route_start_${routeId}`,
+        type: 'route_started',
+        routeId: routeId,
+        routeData: currentRoute,
+        timestamp: new Date().toISOString(),
+        message: `🚚 Blood delivery route started! Driver ${currentRoute.driver?.name || 'Unknown'} is now en route to ${currentRoute.destination?.name || 'Hospital'}`,
+        forUsers: ['hospital', 'blood_bank', 'driver'],
+        status: 'active'
+      };
+      
+      // Store notification in localStorage for all users to see
+      const existingNotifications = JSON.parse(localStorage.getItem('routeNotifications') || '[]');
+      console.log('🚚 Existing notifications:', existingNotifications);
+      
+      // Clear old notifications to prevent duplicates
+      const activeNotifications = existingNotifications.filter(n => n.status === 'active');
+      if (activeNotifications.length > 0) {
+        console.log('🚚 Clearing old notifications to prevent duplicates');
+      }
+      
+      existingNotifications.push(routeStartNotification);
+      localStorage.setItem('routeNotifications', JSON.stringify(existingNotifications));
+      
+      console.log('🚚 Route start notification created for all users:', routeStartNotification);
+      console.log('🚚 All notifications in localStorage:', existingNotifications);
+      
+      console.log('🚚 About to navigate to tracking page with state:', { requestId: routeId, routeData: currentRoute });
+      
+      // Navigate to tracking page
+      navigate('/tracking', { 
+        state: { 
+          requestId: routeId,
+          routeData: currentRoute 
+        } 
+      });
+      
+      console.log('🚚 Navigation completed');
+      
+      alert('Route started successfully! 🚚\n\n✅ Driver: Redirecting to tracking...\n✅ Hospital: Will be notified and redirected to tracking\n✅ Blood Bank: Will be notified and redirected to tracking\n\nAll users will now see live GPS tracking!');
+      return;
     } catch (error) {
       console.error('❌ Error starting route:', error);
       alert('Error starting route');
@@ -124,18 +251,24 @@ const DriverRoutes = () => {
 
   const handleCompleteRoute = async (routeId) => {
     try {
-      const response = await fetch(`${API_BASE}/routes/${routeId}/complete`, {
-        method: 'POST',
-        credentials: 'include'
+      console.log('🚚 Completing route:', routeId);
+      
+      // For demo purposes, update localStorage instead of API call
+      const assignedRoutes = JSON.parse(localStorage.getItem('assignedRoutes') || '[]');
+      const updatedRoutes = assignedRoutes.map(route => {
+        if (route.id === routeId) {
+          return { ...route, status: 'completed', completed_at: new Date().toISOString() };
+        }
+        return route;
       });
-
-      if (response.ok) {
-        // Refresh data
-        fetchData();
-      } else {
-        const error = await response.json();
-        alert(`Error: ${error.error}`);
-      }
+      localStorage.setItem('assignedRoutes', JSON.stringify(updatedRoutes));
+      
+      console.log('✅ Route completed in localStorage');
+      
+      // Refresh data
+      fetchData();
+      
+      alert('Route completed successfully! 🎉');
     } catch (error) {
       console.error('Error completing route:', error);
       alert('Error completing route');
@@ -144,22 +277,27 @@ const DriverRoutes = () => {
 
   const handleUpdateProgress = async (routeId) => {
     try {
-      const response = await fetch(`${API_BASE}/routes/${routeId}/progress`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ latitude: 0, longitude: 0 }) // Placeholder for now
+      console.log('🚚 Updating progress for route:', routeId);
+      
+      // For demo purposes, simulate progress update in localStorage
+      const assignedRoutes = JSON.parse(localStorage.getItem('assignedRoutes') || '[]');
+      const updatedRoutes = assignedRoutes.map(route => {
+        if (route.id === routeId) {
+          // Simulate progress update
+          const currentProgress = route.progress || 0;
+          const newProgress = Math.min(currentProgress + Math.random() * 20, 100);
+          return { ...route, progress: newProgress };
+        }
+        return route;
       });
-
-      if (response.ok) {
-        // Refresh data
-        fetchData();
-      } else {
-        const error = await response.json();
-        alert(`Error: ${error.error}`);
-      }
+      localStorage.setItem('assignedRoutes', JSON.stringify(updatedRoutes));
+      
+      console.log('✅ Progress updated in localStorage');
+      
+      // Refresh data
+      fetchData();
+      
+      alert('Progress updated successfully! 📊');
     } catch (error) {
       console.error('Error updating progress:', error);
       alert('Error updating progress');
@@ -170,19 +308,17 @@ const DriverRoutes = () => {
     setSelectedRoute(route);
     
     try {
-      // Fetch detailed tracking data for this route
-      const response = await fetch(`${API_BASE}/routes/tracking/${route.request_id}`, {
-        credentials: 'include'
-      });
+      console.log('🗺️ Viewing map for route:', route);
       
-      if (response.ok) {
-        const trackingData = await response.json();
-        setRouteTrackingData(trackingData);
+      // For demo purposes, use route data directly instead of API call
+      if (route) {
+        setRouteTrackingData(route);
+        console.log('✅ Route data set for map view');
       } else {
-        console.error('Failed to fetch tracking data');
+        console.error('No route data available');
       }
     } catch (error) {
-      console.error('Error fetching tracking data:', error);
+      console.error('Error setting route data for map:', error);
     }
   };
 
@@ -237,6 +373,36 @@ const DriverRoutes = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
+      {/* Route Start Notification */}
+      {showRouteNotification && routeNotifications.length > 0 && (
+        <div className="fixed top-4 right-4 z-50 max-w-md">
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 shadow-lg">
+            <div className="flex items-start space-x-3">
+              <div className="flex-shrink-0">
+                <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                  <span className="text-green-600 text-sm">🚚</span>
+                </div>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-medium text-green-800">Route Started!</h3>
+                <p className="text-sm text-green-700 mt-1">
+                  {routeNotifications[routeNotifications.length - 1]?.message || 'Your route has started'}
+                </p>
+                <p className="text-xs text-green-600 mt-2">
+                  Redirecting to live tracking in 2 seconds...
+                </p>
+              </div>
+              <button
+                onClick={() => setShowRouteNotification(false)}
+                className="text-green-400 hover:text-green-600"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">

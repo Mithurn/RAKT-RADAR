@@ -237,6 +237,45 @@ def get_emergency_requests():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@emergency_requests_bp.route('/demo/emergency_requests', methods=['GET'])
+def get_demo_emergency_requests():
+    """Demo endpoint to get all emergency requests without authentication (for hackathon demo)"""
+    try:
+        print("🔍 Demo endpoint called - returning all emergency requests")
+        
+        # Get all emergency requests
+        requests = EmergencyRequest.query.all()
+        
+        # Include related data
+        requests_data = []
+        for req in requests:
+            req_dict = req.to_dict()
+            
+            # Get hospital details
+            hospital = Hospital.query.get(req.hospital_id)
+            if hospital:
+                req_dict['hospital'] = hospital.to_dict()
+            
+            # Get suggested bank details
+            if req.suggested_bank_id:
+                bank = BloodBank.query.get(req.suggested_bank_id)
+                if bank:
+                    req_dict['suggested_bank'] = bank.to_dict()
+            
+            # Get route details if exists
+            route = Route.query.filter_by(request_id=req.id).first()
+            if route:
+                req_dict['route'] = route.to_dict()
+            
+            requests_data.append(req_dict)
+        
+        print(f"🔍 Demo endpoint returning {len(requests_data)} requests")
+        return jsonify(requests_data), 200
+        
+    except Exception as e:
+        print(f"❌ Demo endpoint error: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @emergency_requests_bp.route('/emergency_requests/<request_id>', methods=['GET'])
 def get_emergency_request(request_id):
     """Get specific emergency request details"""

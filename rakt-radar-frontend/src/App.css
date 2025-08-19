@@ -243,3 +243,61 @@
 .animate-vehicle {
   animation: vehicle-pulse 2s ease-in-out infinite;
 }
+
+/* Tracking Map Styles */
+.custom-hospital-marker,
+.custom-blood-bank-marker,
+.custom-driver-marker {
+  z-index: 1000;
+}
+
+.custom-driver-marker {
+  z-index: 1001;
+}
+
+/* Map container styles */
+.leaflet-container {
+  height: 100% !important;
+  width: 100% !important;
+}
+
+/* Ensure map takes full height */
+.leaflet-container.leaflet-fade-anim {
+  height: 100% !important;
+}
+
+/* Map wrapper styles */
+.map-wrapper {
+  height: 100%;
+  width: 100%;
+  position: relative;
+}
+
+/* Progress bar overlay */
+.progress-overlay {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* Role-specific info panel */
+.role-info-panel {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db #f9fafb;
+}
+
+.role-info-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.role-info-panel::-webkit-scrollbar-track {
+  background: #f9fafb;
+}
+
+.role-info-panel::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+.role-info-panel::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}

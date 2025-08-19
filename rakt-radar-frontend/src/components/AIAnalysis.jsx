@@ -40,7 +40,7 @@ const AIAnalysis = () => {
     setSelectedBloodUnit(null);
 
     try {
-      const response = await fetch('http://localhost:8000/api/ai_blood_request', {
+      const response = await fetch('/api/ai_blood_request', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -77,7 +77,7 @@ const AIAnalysis = () => {
   const orderBlood = async (bloodUnit) => {
     setIsOrdering(true);
     try {
-      const response = await fetch('http://localhost:8000/api/order_blood', {
+      const response = await fetch('/api/order_blood', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

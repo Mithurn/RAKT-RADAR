@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from './ui/badge';
 import { Plus, Edit, Trash2, Search, Filter, AlertTriangle, CheckCircle } from 'lucide-react';
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = '/api';
 
 const BloodManagement = () => {
   const [bloodUnits, setBloodUnits] = useState([]);
