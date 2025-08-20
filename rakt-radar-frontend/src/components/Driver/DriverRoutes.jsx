@@ -36,6 +36,42 @@ const DriverRoutes = () => {
   const [showLoadingScreen, setShowLoadingScreen] = useState(false);
   const navigate = useNavigate();
 
+  // Auto-redirect to tracking page
+  useEffect(() => {
+    console.log('🚚 Driver - Auto-redirecting to tracking page...');
+    
+    // Small delay to show the loading message briefly
+    const redirectTimer = setTimeout(() => {
+      // Check if there's approved route data
+      const approvedRouteData = localStorage.getItem('approvedRouteData');
+      if (approvedRouteData) {
+        console.log('✅ Found approved route data, redirecting to tracking...');
+        navigate('/tracking');
+        return;
+      }
+      
+      // If no route data, still redirect to tracking (driver should always be on tracking page)
+      console.log('🔄 No route data found, redirecting to tracking anyway...');
+      navigate('/tracking');
+    }, 1000); // 1 second delay to show loading message
+    
+    return () => clearTimeout(redirectTimer);
+  }, [navigate]);
+
+  // Show loading while redirecting
+  if (true) { // Always show loading since we're redirecting
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">🚚 Driver Dashboard</h2>
+          <p className="text-gray-600">Redirecting to tracking page...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Keep the rest of the component for fallback, but it won't be shown
   const fetchData = async () => {
     try {
       setIsLoading(true);

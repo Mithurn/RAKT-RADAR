@@ -106,7 +106,7 @@ function App() {
               <ProtectedRoute>
                 {user?.role === 'hospital' && <Dashboard />}
                 {user?.role === 'blood_bank' && <Navigate to="/blood-bank/dashboard" replace />}
-                {user?.role === 'driver' && <Navigate to="/driver/routes" replace />}
+                {user?.role === 'driver' && <Navigate to="/tracking" replace />}
                 {user?.role === 'admin' && <Navigate to="/admin" replace />}
                 {/* Fallback for unknown roles */}
                 {!user?.role && <Navigate to="/login" replace />}
@@ -174,15 +174,7 @@ function App() {
             } 
           />
 
-          {/* Driver routes */}
-          <Route 
-            path="/driver/routes" 
-            element={
-              <ProtectedRoute allowedRoles={['driver', 'admin']}>
-                <DriverRoutes />
-              </ProtectedRoute>
-            } 
-          />
+          {/* Driver routes - Drivers always go to tracking page */}
           <Route 
             path="/driver/tracking/:requestId" 
             element={
@@ -224,7 +216,7 @@ function App() {
               <ProtectedRoute>
                 {user?.role === 'hospital' && <Navigate to="/" replace />}
                 {user?.role === 'blood_bank' && <Navigate to="/blood-bank/dashboard" replace />}
-                {user?.role === 'driver' && <Navigate to="/driver/routes" replace />}
+                {user?.role === 'driver' && <Navigate to="/tracking" replace />}
                 {user?.role === 'admin' && <Navigate to="/admin" replace />}
                 <Navigate to="/" replace />
               </ProtectedRoute>
@@ -241,8 +233,7 @@ function App() {
               <ProtectedRoute>
                 {user?.role === 'hospital' && <Navigate to="/" replace />}
                 {user?.role === 'blood_bank' && <Navigate to="/blood-bank/dashboard" replace />}
-                {user?.role === 'driver' && <Navigate to="/driver/routes" replace />}
-                {user?.role === 'admin' && <Navigate to="/admin" replace />}
+                {user?.role === 'driver' && <Navigate to="/tracking" replace />}
                 <Navigate to="/" replace />
               </ProtectedRoute>
             } 

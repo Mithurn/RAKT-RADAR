@@ -51,6 +51,7 @@ const SmartRouting = () => {
   const [currentAIStep, setCurrentAIStep] = useState(0);
   const [aiResults, setAiResults] = useState(null);
   const [emergencyRequestData, setEmergencyRequestData] = useState(null);
+  const [isOrderSubmitted, setIsOrderSubmitted] = useState(false);
   
   // Transfer Tracking States
 
@@ -640,6 +641,9 @@ const SmartRouting = () => {
       console.log('🔔 Notification created for blood bank:', notification);
       
       addLiveUpdate(`✅ Emergency request created successfully! Blood bank notified.`, 'success');
+      
+      // Set order as submitted
+      setIsOrderSubmitted(true);
       
       // Clear the emergency request data
       setEmergencyRequestData(null);
@@ -1361,14 +1365,6 @@ const SmartRouting = () => {
                                       <div className="text-sm text-gray-600">
                                         <span className="font-medium text-blue-600">✓ Selected for transfer</span>
                                       </div>
-                                                                              <Button 
-                                        onClick={() => handleOrderBlood(unit)}
-                                        disabled={isProcessing}
-                                        className="bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 text-white"
-                                      >
-                                        <Truck className="w-4 h-4 mr-2" />
-                                        {isProcessing ? 'Processing...' : 'Order Blood'}
-                                      </Button>
                                       <div className="mt-1 text-xs text-green-600 text-center">
                                         Local network optimized
                                       </div>
@@ -1386,18 +1382,22 @@ const SmartRouting = () => {
                         <div className="text-center">
                           <h5 className="font-medium text-blue-800 mb-3 flex items-center justify-center gap-2">
                             <CheckCircle className="w-5 h-5" />
-                            Ready to Place Order
+                            {isOrderSubmitted ? 'Order Submitted!' : 'Ready to Place Order'}
                           </h5>
                           <p className="text-sm text-gray-600 mb-4">
-                            AI analysis complete. Click below to create the emergency request and notify the blood bank.
+                            {isOrderSubmitted 
+                              ? 'Your emergency request has been submitted. Blood bank has been notified and blood is on the way.'
+                              : 'AI analysis complete. Click below to create the emergency request and notify the blood bank.'
+                            }
                           </p>
                           <Button 
                             onClick={handleCreateEmergencyRequest}
-                            disabled={!emergencyRequestData}
+                            disabled={!emergencyRequestData || isOrderSubmitted}
                             className="bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 text-white px-8 py-3 text-lg"
                           >
                             <Truck className="w-5 h-5 mr-2" />
-                            {!emergencyRequestData ? 'Run AI Analysis First' : 'Order Blood Now'}
+                            {isOrderSubmitted ? 'Blood on the way' : 
+                             !emergencyRequestData ? 'Run AI Analysis First' : 'Order Blood Now'}
                           </Button>
                           {!emergencyRequestData && (
                             <p className="text-xs text-gray-500 mt-2">

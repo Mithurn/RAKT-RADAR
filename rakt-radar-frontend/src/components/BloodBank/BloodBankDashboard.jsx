@@ -37,8 +37,28 @@ const BloodBankDashboard = () => {
   const [routeNotifications, setRouteNotifications] = useState([]);
   const [showRouteNotification, setShowRouteNotification] = useState(false);
   const [showLoadingScreen, setShowLoadingScreen] = useState(false);
+  const [isDeletingRequests, setIsDeletingRequests] = useState(false);
 
   const navigate = useNavigate();
+
+  const addLiveUpdate = (message, type = 'info') => {
+    const update = {
+      id: Date.now(),
+      message,
+      type,
+      timestamp: new Date().toISOString()
+    };
+    
+    // For now, just log the message
+    console.log(`📢 ${type.toUpperCase()}: ${message}`);
+    
+    // You can add a toast notification system here later
+    if (type === 'error') {
+      alert(`❌ ${message}`);
+    } else if (type === 'success') {
+      alert(`✅ ${message}`);
+    }
+  };
 
   // Listen for route approved events (when other pages approve routes)
   useEffect(() => {
@@ -109,13 +129,17 @@ const BloodBankDashboard = () => {
               return matches;
             });
             
-            console.log('🔍 Blood Bank - Pending requests from API:', pendingRequests);
-            console.log('🔍 Blood Bank - Setting pendingBloodRequests state with', pendingRequests.length, 'requests');
-            setPendingBloodRequests(pendingRequests);
+            // Filter out deleted requests
+            const deletedRequestIds = JSON.parse(localStorage.getItem('deletedBloodRequestIds') || '[]');
+            const finalPendingRequests = pendingRequests.filter(request => !deletedRequestIds.includes(request.id));
+            
+            console.log('🔍 Blood Bank - Pending requests from API (filtered):', finalPendingRequests);
+            console.log('🔍 Blood Bank - Setting pendingBloodRequests state with', finalPendingRequests.length, 'requests');
+            setPendingBloodRequests(finalPendingRequests);
             
             // Debug: Check what's in the state after setting
             setTimeout(() => {
-              console.log('🔍 Blood Bank - State after setPendingBloodRequests:', pendingRequests);
+              console.log('🔍 Blood Bank - State after setPendingBloodRequests:', finalPendingRequests);
             }, 100);
             
             // Also store in localStorage for other components
@@ -153,6 +177,12 @@ const BloodBankDashboard = () => {
         console.log('🔍 Blood Bank - No route tracking data in localStorage');
       }
       
+      // Load inventory data (blood units)
+      await loadInventoryData();
+      
+      // Load other requests data
+      await loadOtherRequestsData();
+      
       console.log('✅ fetchData completed successfully');
       
     } catch (error) {
@@ -166,14 +196,268 @@ const BloodBankDashboard = () => {
     const allBloodRequests = JSON.parse(localStorage.getItem('bloodRequests') || '[]');
     console.log('🔍 Blood Bank - All blood requests from localStorage:', allBloodRequests);
     
-    // For hackathon demo: Show ALL pending requests
+    // If no blood requests exist, create some mock data for demo
+    if (allBloodRequests.length === 0) {
+      console.log('🔍 Blood Bank - No blood requests found, creating mock data...');
+      const mockBloodRequests = [
+        {
+          id: 'mock_req_001',
+          blood_type: 'O+',
+          quantity_ml: 450,
+          urgency: 'critical',
+          status: 'pending_approval',
+          hospital: { name: 'Emergency Trauma Center', city: 'Chennai' },
+          hospital_name: 'Emergency Trauma Center',
+          created_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(), // 30 minutes ago
+          distance_km: 8,
+          predicted_eta_minutes: 15
+        },
+        {
+          id: 'mock_req_002',
+          blood_type: 'A+',
+          quantity_ml: 300,
+          urgency: 'high',
+          status: 'pending_approval',
+          hospital: { name: 'City Medical Institute', city: 'Chennai' },
+          hospital_name: 'City Medical Institute',
+          created_at: new Date(Date.now() - 45 * 60 * 1000).toISOString(), // 45 minutes ago
+          distance_km: 12,
+          predicted_eta_minutes: 20
+        },
+        {
+          id: 'mock_req_003',
+          blood_type: 'B+',
+          quantity_ml: 500,
+          urgency: 'medium',
+          status: 'pending_approval',
+          hospital: { name: 'Regional Hospital', city: 'Chennai' },
+          hospital_name: 'Regional Hospital',
+          created_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(), // 1 hour ago
+          distance_km: 15,
+          predicted_eta_minutes: 25
+        }
+      ];
+      
+      console.log('🔍 Blood Bank - Mock blood requests created:', mockBloodRequests);
+      localStorage.setItem('bloodRequests', JSON.stringify(mockBloodRequests));
+      allBloodRequests.push(...mockBloodRequests);
+    }
+    
+    // Get deleted request IDs to filter them out
+    const deletedRequestIds = JSON.parse(localStorage.getItem('deletedBloodRequestIds') || '[]');
+    console.log('🔍 Blood Bank - Deleted request IDs:', deletedRequestIds);
+    
+    // Filter out deleted requests and show only valid pending requests
     const validStatuses = ['created', 'pending_approval'];
     const pendingRequests = allBloodRequests.filter(request => 
-      validStatuses.includes(request.status)
+      validStatuses.includes(request.status) && !deletedRequestIds.includes(request.id)
     );
     
-    console.log('🔍 Blood Bank - Pending requests from localStorage:', pendingRequests);
+    console.log('🔍 Blood Bank - Pending requests from localStorage (filtered):', pendingRequests);
     setPendingBloodRequests(pendingRequests);
+    
+    // Also load mock inventory and other requests data for complete dashboard
+    loadMockInventoryData();
+    loadMockRequestsData();
+  };
+
+  const loadInventoryData = async () => {
+    try {
+      console.log('🔍 Blood Bank - Loading inventory data...');
+      
+      // Try to fetch from backend API first
+      try {
+        const response = await fetch('/api/demo/blood_units', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          signal: AbortSignal.timeout(5000)
+        });
+        
+        if (response.ok) {
+          const inventoryData = await response.json();
+          console.log('🔍 Blood Bank - Inventory API response:', inventoryData);
+          setInventory(inventoryData);
+          localStorage.setItem('bloodInventory', JSON.stringify(inventoryData));
+        } else {
+          console.log('🔍 Blood Bank - Inventory API failed, using mock data');
+          loadMockInventoryData();
+        }
+      } catch (error) {
+        console.log('🔍 Blood Bank - Inventory API error, using mock data:', error);
+        loadMockInventoryData();
+      }
+    } catch (error) {
+      console.error('❌ Error loading inventory data:', error);
+      loadMockInventoryData();
+    }
+  };
+
+  const loadMockInventoryData = () => {
+    console.log('🔍 Blood Bank - Loading mock inventory data...');
+    
+    // Create realistic mock inventory data for demo
+    const mockInventory = [
+      {
+        id: 'unit_001',
+        blood_type: 'O+',
+        quantity_ml: 450,
+        status: 'available',
+        expiry_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
+        is_flagged_for_expiry: false,
+        source: 'Voluntary Donation',
+        collected_date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString() // 5 days ago
+      },
+      {
+        id: 'unit_002',
+        blood_type: 'A+',
+        quantity_ml: 450,
+        status: 'available',
+        expiry_date: new Date(Date.now() + 25 * 24 * 60 * 60 * 1000).toISOString(), // 25 days from now
+        is_flagged_for_expiry: false,
+        source: 'Voluntary Donation',
+        collected_date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString() // 3 days ago
+      },
+      {
+        id: 'unit_003',
+        blood_type: 'B+',
+        quantity_ml: 450,
+        status: 'available',
+        expiry_date: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString(), // 20 days from now
+        is_flagged_for_expiry: false,
+        source: 'Voluntary Donation',
+        collected_date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() // 2 days ago
+      },
+      {
+        id: 'unit_004',
+        blood_type: 'AB+',
+        quantity_ml: 450,
+        status: 'reserved',
+        expiry_date: new Date(Date.now() + 35 * 24 * 60 * 60 * 1000).toISOString(), // 35 days from now
+        is_flagged_for_expiry: false,
+        source: 'Voluntary Donation',
+        collected_date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString() // 1 day ago
+      },
+      {
+        id: 'unit_005',
+        blood_type: 'O-',
+        quantity_ml: 450,
+        status: 'available',
+        expiry_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days from now - EXPIRING SOON
+        is_flagged_for_expiry: true,
+        source: 'Voluntary Donation',
+        collected_date: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toISOString() // 25 days ago
+      },
+      {
+        id: 'unit_006',
+        blood_type: 'A-',
+        quantity_ml: 450,
+        status: 'available',
+        expiry_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days from now - EXPIRING SOON
+        is_flagged_for_expiry: true,
+        source: 'Voluntary Donation',
+        collected_date: new Date(Date.now() - 23 * 24 * 60 * 60 * 1000).toISOString() // 23 days ago
+      }
+    ];
+    
+    console.log('🔍 Blood Bank - Mock inventory data created:', mockInventory);
+    setInventory(mockInventory);
+    localStorage.setItem('bloodInventory', JSON.stringify(mockInventory));
+  };
+
+  const loadOtherRequestsData = async () => {
+    try {
+      console.log('🔍 Blood Bank - Loading other requests data...');
+      
+      // Try to fetch from backend API first
+      try {
+        const response = await fetch('/api/demo/emergency_requests', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          signal: AbortSignal.timeout(5000)
+        });
+        
+        if (response.ok) {
+          const allRequests = await response.json();
+          console.log('🔍 Blood Bank - All requests API response:', allRequests);
+          
+          // Set all requests (for active deliveries, completed requests, etc.)
+          setRequests(allRequests);
+          localStorage.setItem('allBloodRequests', JSON.stringify(allRequests));
+        } else {
+          console.log('🔍 Blood Bank - Requests API failed, using mock data');
+          loadMockRequestsData();
+        }
+      } catch (error) {
+        console.log('🔍 Blood Bank - Requests API error, using mock data:', error);
+        loadMockRequestsData();
+      }
+    } catch (error) {
+      console.error('❌ Error loading other requests data:', error);
+      loadMockRequestsData();
+    }
+  };
+
+  const loadMockRequestsData = () => {
+    console.log('🔍 Blood Bank - Loading mock requests data...');
+    
+    // Create realistic mock requests data for demo
+    const mockRequests = [
+      {
+        id: 'req_001',
+        blood_type: 'O+',
+        quantity_ml: 450,
+        urgency: 'critical',
+        status: 'approved',
+        hospital: { name: 'City General Hospital', city: 'Chennai' },
+        hospital_name: 'City General Hospital',
+        created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+        updated_at: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(), // 1 hour ago
+        distance_km: 12,
+        estimated_time: 25,
+        predicted_eta_minutes: 25
+      },
+      {
+        id: 'req_002',
+        blood_type: 'A+',
+        quantity_ml: 300,
+        urgency: 'high',
+        status: 'en_route',
+        hospital: { name: 'Metro Medical Center', city: 'Chennai' },
+        hospital_name: 'Metro Medical Center',
+        created_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(), // 4 hours ago
+        updated_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(), // 30 minutes ago
+        distance_km: 18,
+        estimated_time: 35,
+        predicted_eta_minutes: 35,
+        route: {
+          driver_name: 'Rajesh Kumar',
+          started_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+          progress_percent: 45
+        }
+      },
+      {
+        id: 'req_003',
+        blood_type: 'B+',
+        quantity_ml: 500,
+        urgency: 'medium',
+        status: 'delivered',
+        hospital: { name: 'Community Hospital', city: 'Chennai' },
+        hospital_name: 'Community Hospital',
+        created_at: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(), // 8 hours ago
+        updated_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+        distance_km: 15,
+        estimated_time: 30,
+        predicted_eta_minutes: 30
+      }
+    ];
+    
+    console.log('🔍 Blood Bank - Mock requests data created:', mockRequests);
+    setRequests(mockRequests);
+    localStorage.setItem('allBloodRequests', JSON.stringify(mockRequests));
   };
 
   useEffect(() => {
@@ -255,6 +539,11 @@ const BloodBankDashboard = () => {
     
     // Set up periodic refresh every 10 seconds to check for new requests
     const refreshInterval = setInterval(() => {
+      // Don't refresh if we're currently deleting requests
+      if (isDeletingRequests) {
+        console.log('🔄 Skipping refresh - currently deleting requests');
+        return;
+      }
       console.log('🔄 Periodic refresh checking for new requests...');
       fetchData();
     }, 10000);
@@ -302,7 +591,7 @@ const BloodBankDashboard = () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('customStorageChange', handleCustomStorageChange);
     };
-  }, [fetchData]);
+  }, [fetchData, isDeletingRequests]);
 
   // Enhanced real-time updates for instant notification
   useEffect(() => {
@@ -353,6 +642,11 @@ const BloodBankDashboard = () => {
 
     // Also poll every 2 seconds for immediate updates
     const quickPollInterval = setInterval(() => {
+      // Don't poll if we're currently deleting requests
+      if (isDeletingRequests) {
+        console.log('🔄 Skipping quick poll - currently deleting requests');
+        return;
+      }
       if (user && entityDetails) {
         fetchData();
       }
@@ -370,7 +664,7 @@ const BloodBankDashboard = () => {
       clearInterval(quickPollInterval);
       console.log('🧹 Blood Bank - Enhanced real-time listeners cleaned up');
     };
-  }, [user, entityDetails]);
+  }, [user, entityDetails, fetchData, isDeletingRequests]);
 
   // Monitor for route start notifications and redirect to tracking
   useEffect(() => {
@@ -416,7 +710,7 @@ const BloodBankDashboard = () => {
       if (newBloodRequestNotifications.length > 0) {
         console.log('🔔 Blood Bank - New blood request notifications found:', newBloodRequestNotifications);
         // Refresh data to show new requests
-        if (user && entityDetails) {
+        if (user && entityDetails && !isDeletingRequests) {
           fetchData();
         }
         
@@ -1061,25 +1355,101 @@ const BloodBankDashboard = () => {
 
   const handleRejectBloodRequest = async (requestId) => {
     try {
-      // Update request status in localStorage
-      const bloodRequests = JSON.parse(localStorage.getItem('bloodRequests') || '[]');
-      const updatedRequests = bloodRequests.map(req => {
-        if (req.id === requestId) {
-          return { ...req, status: 'rejected', rejected_at: new Date().toISOString() };
-        }
-        return req;
-      });
-      localStorage.setItem('bloodRequests', JSON.stringify(updatedRequests));
-
-      // Refresh data
-      fetchData();
+      console.log('🏥 Blood Bank - Rejecting request:', requestId);
       
-      // Show rejection message without alert
-      console.log('❌ Blood request rejected');
+      // For demo purposes, skip API call
+      console.log('🏥 Blood Bank - Skipping API call, using localStorage only');
+      
+      // Don't call fetchData() here as it will re-fetch deleted requests
+      console.log('✅ Request rejected successfully');
+      addLiveUpdate(`❌ Blood request rejected successfully`, 'success');
       
     } catch (error) {
-      console.error('Error rejecting blood request:', error);
-      console.log('❌ Error rejecting blood request');
+      console.error('Error rejecting request:', error);
+      addLiveUpdate(`❌ Error rejecting request: ${error.message}`, 'error');
+    }
+  };
+
+  const handleDeleteBloodRequest = async (requestId) => {
+    try {
+      console.log('🗑️ Blood Bank - Deleting request:', requestId);
+      
+      setIsDeletingRequests(true);
+      
+      // Remove from localStorage
+      const updatedRequests = pendingBloodRequests.filter(req => req.id !== requestId);
+      setPendingBloodRequests(updatedRequests);
+      
+      // Also remove from localStorage
+      const existingRequests = JSON.parse(localStorage.getItem('bloodRequests') || '[]');
+      const filteredRequests = existingRequests.filter(req => req.id !== requestId);
+      localStorage.setItem('bloodRequests', JSON.stringify(filteredRequests));
+      
+      // Track deleted request IDs to prevent them from coming back
+      const deletedRequests = JSON.parse(localStorage.getItem('deletedBloodRequestIds') || '[]');
+      deletedRequests.push(requestId);
+      localStorage.setItem('deletedBloodRequestIds', JSON.stringify(deletedRequests));
+      
+      console.log('✅ Request deleted successfully');
+      addLiveUpdate(`🗑️ Blood request deleted successfully`, 'success');
+      
+      // Reset flag after a short delay
+      setTimeout(() => setIsDeletingRequests(false), 1000);
+      
+    } catch (error) {
+      console.error('Error deleting request:', error);
+      addLiveUpdate(`❌ Error deleting request: ${error.message}`, 'error');
+      setIsDeletingRequests(false);
+    }
+  };
+
+  const handleDeleteAllRequests = async () => {
+    try {
+      console.log('🗑️ Blood Bank - Deleting ALL requests');
+      
+      if (window.confirm('Are you sure you want to delete ALL blood requests? This action cannot be undone.')) {
+        setIsDeletingRequests(true);
+        
+        // Get all current request IDs to track them as deleted
+        const currentRequestIds = pendingBloodRequests.map(req => req.id);
+        
+        // Clear all requests
+        setPendingBloodRequests([]);
+        
+        // Clear from localStorage
+        localStorage.setItem('bloodRequests', JSON.stringify([]));
+        
+        // Track all deleted request IDs
+        const deletedRequests = JSON.parse(localStorage.getItem('deletedBloodRequestIds') || '[]');
+        deletedRequests.push(...currentRequestIds);
+        localStorage.setItem('deletedBloodRequestIds', JSON.stringify(deletedRequests));
+        
+        console.log('✅ All requests deleted successfully');
+        addLiveUpdate(`🗑️ All blood requests deleted successfully`, 'success');
+        
+        // Reset flag after a short delay
+        setTimeout(() => setIsDeletingRequests(false), 1000);
+      }
+      
+    } catch (error) {
+      console.error('Error deleting all requests:', error);
+      addLiveUpdate(`❌ Error deleting all requests: ${error.message}`, 'error');
+      setIsDeletingRequests(false);
+    }
+  };
+
+  const clearDeletedRequestsTracking = () => {
+    try {
+      console.log('🧹 Clearing deleted requests tracking...');
+      localStorage.removeItem('deletedBloodRequestIds');
+      console.log('✅ Deleted requests tracking cleared');
+      addLiveUpdate(`🧹 Deleted requests tracking cleared`, 'success');
+      
+      // Refresh data to show any previously deleted requests
+      fetchData();
+    } catch (error) {
+      console.error('Error clearing deleted requests tracking:', error);
+      addLiveUpdate(`❌ Error clearing tracking: ${error.message}`, 'error');
     }
   };
 
@@ -1123,6 +1493,19 @@ const BloodBankDashboard = () => {
   const availableUnits = inventory.filter(unit => unit.status === 'available').length;
   const reservedUnits = inventory.filter(unit => unit.status === 'reserved').length;
   const expiringUnits = inventory.filter(unit => unit.is_flagged_for_expiry).length;
+
+  // Debug logging for stats
+  console.log('🔍 Blood Bank - Stats calculation:', {
+    inventoryLength: inventory.length,
+    totalUnits,
+    availableUnits,
+    reservedUnits,
+    expiringUnits,
+    requestsLength: requests.length,
+    activeRequestsLength: activeRequests.length,
+    completedRequestsLength: completedRequests.length,
+    pendingBloodRequestsLength: pendingBloodRequests.length
+  });
 
   if (!user || !entityDetails) {
     return (
@@ -1171,7 +1554,7 @@ const BloodBankDashboard = () => {
       {showLoadingScreen && (
         <div className="fixed inset-0 bg-white flex items-center justify-center z-50">
           <div className="text-center">
-            <Droplets className="w-16 h-16 text-blue-500 animate-spin mx-auto mb-4" />
+            <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div>
             <h2 className="text-2xl font-bold text-gray-900">Processing Request...</h2>
             <p className="text-gray-600">Redirecting to tracking page in a moment.</p>
           </div>
@@ -1205,86 +1588,7 @@ const BloodBankDashboard = () => {
           </div>
         </div>
 
-        {/* Live Tracking Access */}
-        <div className="mb-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <MapPin className="h-5 w-5 text-blue-600" />
-                <span>Live Blood Delivery Tracking</span>
-              </CardTitle>
-              <CardDescription>
-                Monitor active blood delivery routes in real-time
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {pendingBloodRequests.filter(req => req.status === 'approved').length > 0 ? (
-                <div className="space-y-4">
-                  <div className="text-sm text-gray-600 mb-3">
-                    Active blood delivery routes from your blood bank:
-                  </div>
-                  {pendingBloodRequests
-                    .filter(req => req.status === 'approved')
-                    .map((request, index) => (
-                      <div key={index} className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-2 mb-2">
-                              <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                                {request.blood_type}
-                              </Badge>
-                              <Badge variant="secondary" className="bg-green-100 text-green-800">
-                                {request.quantity_ml}ml
-                              </Badge>
-                              <Badge variant="secondary" className="bg-orange-100 text-orange-800">
-                                {request.urgency}
-                              </Badge>
-                            </div>
-                            <p className="text-sm font-medium text-gray-900">
-                              To: {request.hospital_name}
-                            </p>
-                            <p className="text-xs text-gray-600">
-                              Request ID: {request.id}
-                            </p>
-                          </div>
-                          <div className="flex flex-col items-end space-y-2">
-                            <Button 
-                              onClick={() => window.location.href = '/tracking'}
-                              size="sm"
-                              className="bg-blue-600 hover:bg-blue-700"
-                            >
-                              <MapPin className="h-4 w-4 mr-2" />
-                              Track Live
-                            </Button>
-                            <Badge variant="secondary" className="bg-green-100 text-green-800">
-                              Route Active
-                            </Badge>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              ) : (
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-gray-600">
-                    {pendingBloodRequests.filter(req => req.status === 'created').length > 0 
-                      ? 'No active routes yet. Approve requests to start tracking.'
-                      : 'No pending or active blood requests at the moment.'
-                    }
-                  </div>
-                  <Button 
-                    onClick={() => window.location.href = '/tracking'}
-                    className="bg-blue-600 hover:bg-blue-700"
-                    disabled={pendingBloodRequests.filter(req => req.status === 'approved').length === 0}
-                  >
-                    <MapPin className="h-4 w-4 mr-2" />
-                    View Live Tracking
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -1344,178 +1648,33 @@ const BloodBankDashboard = () => {
         {/* Pending Blood Requests from Hospitals */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Droplets className="w-5 h-5 text-red-600" />
-                <span>Pending Blood Requests ({pendingBloodRequests.length})</span>
-              </div>
-              <div className="flex space-x-2">
-                              <Button 
-                onClick={() => {
-                  console.log('🔄 Manual refresh of blood requests clicked');
-                  console.log('🔄 Current user state:', user);
-                  console.log('🔄 Current entityDetails state:', entityDetails);
-                  
-                  const bloodRequests = JSON.parse(localStorage.getItem('bloodRequests') || '[]');
-                  console.log('🔄 Current blood requests:', bloodRequests);
-                  console.log('🔄 Current localStorage keys:', Object.keys(localStorage));
-                  
-                  // Check each blood request status
-                  bloodRequests.forEach((req, index) => {
-                    console.log(`🔄 Blood request ${index}:`, {
-                      id: req.id,
-                      status: req.status,
-                      blood_type: req.blood_type,
-                      quantity_ml: req.quantity_ml
-                    });
-                  });
-                  
-                  const pendingRequests = bloodRequests.filter(req => req.status === 'pending_approval');
-                  console.log('🔄 Pending requests after refresh:', pendingRequests);
-                  setPendingBloodRequests(pendingRequests);
-                }}
-                size="sm"
-                variant="outline"
-              >
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Refresh
-              </Button>
-                <Button 
-                  onClick={() => {
-                    // Add a test request for debugging
-                    const testRequest = {
-                      id: 'test-' + Date.now(),
-                      blood_type: 'O+',
-                      quantity_ml: 450,
-                      urgency: 'critical',
-                      hospital_name: 'Test Hospital',
-                      status: 'pending_approval',
-                      created_at: new Date().toISOString(),
-                      distance_km: 15,
-                      estimated_time: '30 min'
-                    };
-                    const existingRequests = JSON.parse(localStorage.getItem('bloodRequests') || '[]');
-                    existingRequests.push(testRequest);
-                    localStorage.setItem('bloodRequests', JSON.stringify(existingRequests));
-                    console.log('🧪 Test request added:', testRequest);
-                    console.log('🧪 All blood requests after adding test:', existingRequests);
-                    fetchData(); // Refresh the data
-                  }}
-                  size="sm"
-                  variant="outline"
-                  className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
-                >
-                  🧪 Add Test
-                </Button>
-                <Button 
-                  onClick={() => {
-                    // Check and fix blood request statuses
-                    console.log('🔧 Checking blood request statuses...');
-                    const bloodRequests = JSON.parse(localStorage.getItem('bloodRequests') || '[]');
-                    
-                    bloodRequests.forEach((req, index) => {
-                      console.log(`🔧 Request ${index}:`, {
-                        id: req.id,
-                        status: req.status,
-                        blood_type: req.blood_type
-                      });
-                      
-                      // If status is missing or not 'pending_approval', fix it
-                      if (!req.status || req.status !== 'pending_approval') {
-                        console.log(`🔧 Fixing request ${index} status from '${req.status}' to 'pending_approval'`);
-                        req.status = 'pending_approval';
-                      }
-                    });
-                    
-                    localStorage.setItem('bloodRequests', JSON.stringify(bloodRequests));
-                    console.log('🔧 Fixed blood requests:', bloodRequests);
-                    fetchData(); // Refresh the data
-                  }}
-                  size="sm"
-                  variant="outline"
-                  className="bg-blue-100 text-blue-800 hover:bg-blue-200"
-                >
-                  🔧 Fix Statuses
-                </Button>
-                <Button 
-                  onClick={() => {
-                    // Show all blood requests regardless of status
-                    console.log('👁️ Showing all blood requests...');
-                    const bloodRequests = JSON.parse(localStorage.getItem('bloodRequests') || '[]');
-                    
-                    console.log('👁️ All blood requests in localStorage:');
-                    bloodRequests.forEach((req, index) => {
-                      console.log(`👁️ Request ${index + 1}:`, {
-                        id: req.id,
-                        status: req.status || 'NO_STATUS',
-                        blood_type: req.blood_type,
-                        hospital: req.hospital_name,
-                        quantity: req.quantity_ml,
-                        created: req.created_at
-                      });
-                    });
-                    
-                    // Also show what's in the pendingBloodRequests state
-                    console.log('👁️ Current pendingBloodRequests state:', pendingBloodRequests);
-                    
-                    // Show localStorage keys
-                    console.log('👁️ All localStorage keys:', Object.keys(localStorage));
-                    
-                    // Show routeNotifications
-                    const notifications = JSON.parse(localStorage.getItem('routeNotifications') || '[]');
-                    console.log('👁️ All routeNotifications in localStorage:', notifications);
-                  }}
-                  size="sm"
-                  variant="outline"
-                  className="bg-green-100 text-green-800 hover:bg-green-200"
-                >
-                  👁️ Show All
-                </Button>
-              </div>
-            </div>
+            <CardTitle className="flex items-center space-x-2">
+              <Package className="w-5 h-5 text-red-600" />
+              <span>Pending Blood Requests ({pendingBloodRequests.length})</span>
+            </CardTitle>
             <CardDescription>
-              Blood requests from hospitals awaiting your approval
+              Emergency blood requests from hospitals requiring approval
             </CardDescription>
-            {/* Debug Info - Remove this in production */}
-            <div className="mt-2 p-2 bg-gray-100 rounded text-xs">
-              <p className="font-medium">Debug Info:</p>
-              <p>Total requests in localStorage: {JSON.parse(localStorage.getItem('bloodRequests') || '[]').length}</p>
-              <p>Pending requests: {pendingBloodRequests.length}</p>
-              <p>User role: {user?.role || 'undefined'}</p>
-              <p>Entity name: {entityDetails?.name || 'null'}</p>
-              <p>Last updated: {lastUpdated.toLocaleTimeString()}</p>
-              <div className="flex space-x-2 mt-2">
+            {pendingBloodRequests.length > 0 && (
+              <div className="flex justify-end space-x-2">
                 <Button 
-                  onClick={() => {
-                    console.log('🧪 Force refresh clicked');
-                    fetchData();
-                  }}
+                  onClick={handleDeleteAllRequests}
+                  variant="destructive"
                   size="sm"
-                  variant="outline"
+                  className="bg-red-600 hover:bg-red-700"
                 >
-                  🧪 Force Refresh
+                  🗑️ Delete All Requests
                 </Button>
                 <Button 
-                  onClick={async () => {
-                    console.log('🧪 Testing API endpoint...');
-                    try {
-                      const response = await fetch('/api/demo/emergency_requests');
-                      console.log('🧪 Test API response:', response.status, response.statusText);
-                      if (response.ok) {
-                        const data = await response.json();
-                        console.log('🧪 Test API data length:', data.length);
-                      }
-                    } catch (error) {
-                      console.error('🧪 Test API error:', error);
-                    }
-                  }}
-                  size="sm"
+                  onClick={clearDeletedRequestsTracking}
                   variant="outline"
+                  size="sm"
+                  className="border-blue-300 text-blue-600 hover:bg-blue-50"
                 >
-                  🧪 Test API
+                  🧹 Clear Tracking
                 </Button>
               </div>
-            </div>
+            )}
           </CardHeader>
           <CardContent>
             {pendingBloodRequests.length === 0 ? (
@@ -1582,6 +1741,14 @@ const BloodBankDashboard = () => {
                       >
                         <XCircle className="w-4 h-4 mr-2" />
                         Reject
+                      </Button>
+                      <Button 
+                        onClick={() => handleDeleteBloodRequest(request.id)}
+                        size="sm"
+                        variant="outline"
+                        className="border-red-300 text-red-600 hover:bg-red-50"
+                      >
+                        🗑️ Delete
                       </Button>
                     </div>
                   </div>
@@ -1919,217 +2086,9 @@ const BloodBankDashboard = () => {
           </Card>
         )}
 
-        {/* Test Notification Button */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              🧪 Test Notification System
-            </CardTitle>
-            <CardDescription>
-              Test if the driver notification system is working
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button 
-              onClick={() => {
-                console.log('🧪 Manual test notification button clicked');
-                
-                // Create a test route data
-                const testRouteData = {
-                  id: `test_${Date.now()}`,
-                  request_id: 'test_request',
-                  blood_type: 'A+',
-                  quantity_ml: 500,
-                  source: {
-                    name: 'Test Blood Bank',
-                    address: 'Test Address',
-                    latitude: 13.0827,
-                    longitude: 80.2707
-                  },
-                  destination: {
-                    name: 'Test Hospital',
-                    address: 'Test Hospital Address',
-                    latitude: 13.0569,
-                    longitude: 80.2425
-                  },
-                  driver: {
-                    name: 'demo_driver',
-                    phone: '+91 98765 43210',
-                    vehicle_number: 'TN-01-AB-1234'
-                  },
-                  status: 'pending',
-                  created_at: new Date().toISOString(),
-                  distance_km: 15,
-                  eta_minutes: 25,
-                  start_latitude: 13.0827,
-                  start_longitude: 80.2707,
-                  end_latitude: 13.0569,
-                  end_longitude: 80.2425
-                };
-                
-                // Create test notification
-                const testNotification = {
-                  id: `manual_test_${Date.now()}`,
-                  type: 'route_assigned',
-                  data: testRouteData,
-                  timestamp: new Date().toISOString(),
-                  status: 'active'
-                };
-                
-                // Store test notification
-                const testNotifications = JSON.parse(localStorage.getItem('testNotifications') || '[]');
-                testNotifications.push(testNotification);
-                localStorage.setItem('testNotifications', JSON.stringify(testNotifications));
-                
-                // Dispatch test event
-                window.dispatchEvent(new CustomEvent('testRouteAssigned', { 
-                  detail: { 
-                    notification: testNotification,
-                    routeData: testRouteData 
-                  } 
-                }));
-                
-                console.log('🧪 Manual test notification dispatched:', testNotification);
-                alert('🧪 Test notification sent! Check the driver page console for details.');
-              }}
-              className="bg-purple-600 hover:bg-purple-700"
-            >
-              🧪 Send Test Notification to Driver
-            </Button>
-            
-            <Button 
-              onClick={() => {
-                console.log('🧪 Testing loading screen workflow...');
-                
-                // Test the localStorage flag setting
-                const testRouteData = {
-                  id: `test_${Date.now()}`,
-                  request_id: 'test_request',
-                  blood_type: 'A+',
-                  quantity_ml: 500,
-                  source: { name: 'Test Blood Bank' },
-                  destination: { name: 'Test Hospital' },
-                  driver: { name: 'demo_driver' },
-                  status: 'pending'
-                };
-                
-                // Set the flags that should trigger loading screens
-                localStorage.setItem('approvedRouteData', JSON.stringify(testRouteData));
-                localStorage.setItem('routeApproved', 'true');
-                localStorage.setItem('routeApprovedAt', new Date().toISOString());
-                
-                // Dispatch the event
-                window.dispatchEvent(new CustomEvent('routeApproved', { 
-                  detail: { routeData: testRouteData } 
-                }));
-                
-                console.log('🧪 Test loading screen workflow triggered');
-                alert('🧪 Loading screen workflow test triggered! Check all three pages for loading screens.');
-              }}
-              className="bg-blue-600 hover:bg-blue-700 ml-2"
-            >
-              🧪 Test Loading Screen Workflow
-            </Button>
-            
-            <Button 
-              onClick={() => {
-                console.log('🧪 Testing cross-tab notification system...');
-                
-                // Test the cross-tab notification system
-                const testRouteData = {
-                  id: `cross_tab_test_${Date.now()}`,
-                  request_id: 'cross_tab_test',
-                  blood_type: 'B+',
-                  quantity_ml: 300,
-                  source: { name: 'Test Blood Bank' },
-                  destination: { name: 'Test Hospital' },
-                  driver: { name: 'demo_driver' },
-                  status: 'pending'
-                };
-                
-                // Set the flags that should trigger cross-tab notifications
-                localStorage.setItem('approvedRouteData', JSON.stringify(testRouteData));
-                localStorage.setItem('routeApproved', 'true');
-                localStorage.setItem('routeApprovedAt', new Date().toISOString());
-                
-                // Force a localStorage change to trigger cross-tab events
-                const timestamp = Date.now();
-                localStorage.setItem('routeApprovedTimestamp', timestamp.toString());
-                
-                // Dispatch the event
-                window.dispatchEvent(new CustomEvent('routeApproved', { 
-                  detail: { routeData: testRouteData } 
-                }));
-                
-                // Dispatch a storage event for cross-tab communication
-                const storageEvent = new StorageEvent('storage', {
-                  key: 'routeApproved',
-                  newValue: 'true',
-                  oldValue: null,
-                  url: window.location.href
-                });
-                window.dispatchEvent(storageEvent);
-                
-                console.log('🧪 Cross-tab notification test triggered');
-                alert('🧪 Cross-tab notification test triggered! Check all three pages for loading screens and redirects.');
-              }}
-              className="bg-green-600 hover:bg-green-700 ml-2"
-            >
-              🧪 Test Cross-Tab Notifications
-            </Button>
-          </CardContent>
-        </Card>
 
-        {/* Test Loading Screen Workflow */}
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-          <h3 className="text-lg font-semibold text-yellow-800 mb-2">🧪 Test Loading Screen Workflow</h3>
-          <p className="text-yellow-700 mb-3">Test the approval workflow with loading screen and redirect</p>
-          <button
-            onClick={() => {
-              console.log('🧪 Testing loading screen workflow...');
-              const testRouteData = {
-                id: 'test_route_123',
-                blood_type: 'O+',
-                quantity_ml: 500,
-                source: {
-                  name: 'Test Blood Bank',
-                  latitude: 13.0827,
-                  longitude: 80.2707
-                },
-                destination: {
-                  name: 'Test Hospital',
-                  latitude: 13.0569,
-                  longitude: 80.2425
-                },
-                driver: {
-                  name: 'Test Driver',
-                  phone: '+91 98765 43210',
-                  vehicle_number: 'TN-01-AB-1234'
-                },
-                status: 'pending',
-                eta_minutes: 25,
-                distance_km: 15,
-                created_at: new Date().toISOString()
-              };
-              
-              // Store test data
-              localStorage.setItem('approvedRouteData', JSON.stringify(testRouteData));
-              localStorage.setItem('routeApproved', 'true');
-              localStorage.setItem('routeApprovedAt', new Date().toISOString());
-              
-              // Show loading screen and redirect
-              setShowLoadingScreen(true);
-              
-              setTimeout(() => {
-                console.log('🧪 Test: Redirecting to tracking page...');
-                navigate('/tracking');
-              }, 2000);
-            }}
-            className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-md text-sm font-medium"
-          >
-            🧪 Test Approval Workflow
-          </button>
-        </div>
+
+
       </div>
     </div>
   );

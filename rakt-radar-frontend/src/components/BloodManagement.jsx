@@ -169,11 +169,26 @@ const BloodManagement = () => {
     }
   };
 
+  const getExpiryStatus = (expiryDate) => {
+    const daysUntilExpiry = Math.ceil((new Date(expiryDate) - new Date()) / (1000 * 60 * 60 * 24));
+    if (daysUntilExpiry <= 0) return { status: 'expired', color: 'text-red-600', icon: '🚨' };
+    if (daysUntilExpiry <= 3) return { status: 'critical', color: 'text-red-600', icon: '⚠️' };
+    if (daysUntilExpiry <= 7) return { status: 'warning', color: 'text-orange-600', icon: '⚠️' };
+    return { status: 'safe', color: 'text-green-600', icon: '✅' };
+  };
+
   const filteredUnits = bloodUnits.filter(unit => {
     const matchesSearch = unit.blood_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          unit.status.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filterStatus === 'all' || unit.status === filterStatus;
     return matchesSearch && matchesFilter;
+  }).sort((a, b) => {
+    // Sort by expiry priority: critical > warning > safe > expired
+    const statusA = getExpiryStatus(a.expiry_date).status;
+    const statusB = getExpiryStatus(b.expiry_date).status;
+    
+    const priorityOrder = { 'critical': 1, 'warning': 2, 'safe': 3, 'expired': 4 };
+    return priorityOrder[statusA] - priorityOrder[statusB];
   });
 
   const getStatusColor = (status) => {
@@ -183,14 +198,6 @@ const BloodManagement = () => {
       case 'expired': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
-  };
-
-  const getExpiryStatus = (expiryDate) => {
-    const daysUntilExpiry = Math.ceil((new Date(expiryDate) - new Date()) / (1000 * 60 * 60 * 24));
-    if (daysUntilExpiry <= 0) return { status: 'expired', color: 'text-red-600', icon: '🚨' };
-    if (daysUntilExpiry <= 3) return { status: 'critical', color: 'text-red-600', icon: '⚠️' };
-    if (daysUntilExpiry <= 7) return { status: 'warning', color: 'text-orange-600', icon: '⚠️' };
-    return { status: 'safe', color: 'text-green-600', icon: '✅' };
   };
 
   return (

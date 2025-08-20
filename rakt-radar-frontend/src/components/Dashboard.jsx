@@ -244,49 +244,7 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Test Tracking Page */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <h3 className="text-lg font-semibold text-blue-800 mb-2">🧪 Test Tracking Page</h3>
-          <p className="text-blue-700 mb-3">Test the tracking page with sample data</p>
-          <button
-            onClick={() => {
-              console.log('🧪 Testing tracking page...');
-              const testRouteData = {
-                id: 'test_route_123',
-                blood_type: 'O+',
-                quantity_ml: 500,
-                source: {
-                  name: 'Test Blood Bank',
-                  latitude: 13.0827,
-                  longitude: 80.2707
-                },
-                destination: {
-                  name: 'Test Hospital',
-                  latitude: 13.0569,
-                  longitude: 80.2425
-                },
-                driver: {
-                  name: 'Test Driver',
-                  phone: '+91 98765 43210',
-                  vehicle_number: 'TN-01-AB-1234'
-                },
-                status: 'pending',
-                eta_minutes: 25,
-                distance_km: 15,
-                created_at: new Date().toISOString()
-              };
-              
-              // Store test data
-              localStorage.setItem('approvedRouteData', JSON.stringify(testRouteData));
-              
-              // Navigate to tracking page
-              window.location.href = '/tracking';
-            }}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium"
-          >
-            🧪 Test Tracking Page
-          </button>
-        </div>
+
 
         {/* Live System Status */}
         <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-green-50 rounded-lg border">
@@ -346,34 +304,7 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* Live Tracking Access */}
-        <div className="mb-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <MapPin className="h-5 w-5 text-blue-600" />
-                <span>Live Blood Delivery Tracking</span>
-              </CardTitle>
-              <CardDescription>
-                Monitor active blood delivery routes in real-time
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-gray-600">
-                  View live tracking of blood units being delivered to hospitals
-                </div>
-                <Button 
-                  onClick={() => window.location.href = '/tracking'}
-                  className="bg-blue-600 hover:bg-blue-700"
-                >
-                  <MapPin className="h-4 w-4 mr-2" />
-                  View Live Tracking
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+
 
         {/* Main Content - Overview Only */}
         <div className="space-y-6">

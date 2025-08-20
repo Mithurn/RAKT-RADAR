@@ -73,7 +73,6 @@ const Navigation = ({ user, onLogout }) => {
         ];
       case 'driver':
         return [
-          { path: '/driver/routes', label: 'My Routes', icon: <MapPin className="w-4 h-4" /> },
           { path: '/tracking', label: 'Live Tracking', icon: <MapPin className="w-4 h-4" /> }
         ];
       case 'admin':
