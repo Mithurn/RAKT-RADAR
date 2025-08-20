@@ -108,7 +108,8 @@ function App() {
                 {user?.role === 'blood_bank' && <Navigate to="/blood-bank/dashboard" replace />}
                 {user?.role === 'driver' && <Navigate to="/driver/routes" replace />}
                 {user?.role === 'admin' && <Navigate to="/admin" replace />}
-                <Dashboard />
+                {/* Fallback for unknown roles */}
+                {!user?.role && <Navigate to="/login" replace />}
               </ProtectedRoute>
             } 
           />
@@ -186,6 +187,16 @@ function App() {
             path="/driver/tracking/:requestId" 
             element={
               <ProtectedRoute allowedRoles={['driver', 'admin']}>
+                <UnifiedTracking />
+              </ProtectedRoute>
+            } 
+          />
+
+          {/* General tracking route - accessible to all authenticated users */}
+          <Route 
+            path="/tracking" 
+            element={
+              <ProtectedRoute allowedRoles={['hospital', 'blood_bank', 'driver', 'admin']}>
                 <UnifiedTracking />
               </ProtectedRoute>
             } 

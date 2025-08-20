@@ -320,6 +320,10 @@ const BloodBankDashboard = () => {
         setRouteNotifications(activeNotifications);
         setShowRouteNotification(true);
         
+        // Refresh route data immediately when route starts
+        console.log('🔄 Blood Bank - Refreshing route data after route start...');
+        fetchData();
+        
         // Auto-redirect to tracking after 3 seconds
         setTimeout(() => {
           console.log('🏥 Blood Bank - Auto-redirecting to tracking page...');
@@ -504,6 +508,118 @@ const BloodBankDashboard = () => {
 
   const handleApproveBloodRequest = async (requestId) => {
     try {
+      console.log('🏥 Blood Bank - Approving request via API:', requestId);
+      
+      // Call the DEMO API endpoint to approve the request (no authentication required)
+      const response = await fetch(`/api/demo/emergency_requests/${requestId}/approve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status} ${response.statusText}`);
+      }
+      
+      const result = await response.json();
+      console.log('🏥 Blood Bank - API approval response:', result);
+      
+      if (result.success) {
+        // Create driver notification for the approved request
+        if (result.driver_notification) {
+          const driverNotification = {
+            id: result.driver_notification.id,
+            type: 'route_assigned',
+            route_id: result.route.id,
+            request_id: requestId,
+            driver_name: result.driver_notification.driver_name,
+            blood_type: result.driver_notification.blood_type,
+            quantity_ml: result.driver_notification.quantity_ml,
+            urgency: result.driver_notification.urgency,
+            hospital_name: result.driver_notification.hospital_name,
+            blood_bank_name: result.driver_notification.blood_bank_name,
+            distance_km: result.driver_notification.distance_km,
+            eta_minutes: result.driver_notification.eta_minutes,
+            timestamp: result.driver_notification.timestamp,
+            status: 'active',
+            message: result.driver_notification.message
+          };
+          
+          // Store notification in localStorage for driver to access
+          const existingNotifications = JSON.parse(localStorage.getItem('routeNotifications') || '[]');
+          existingNotifications.push(driverNotification);
+          localStorage.setItem('routeNotifications', JSON.stringify(existingNotifications));
+          
+          console.log('🔔 Driver notification stored:', driverNotification);
+          
+          // Also store the route data for tracking
+          const routeData = {
+            id: result.route.id,
+            request_id: requestId,
+            blood_type: result.driver_notification.blood_type,
+            quantity_ml: result.driver_notification.quantity_ml,
+            source: {
+              name: result.driver_notification.blood_bank_name,
+              address: 'Blood Bank Address',
+              latitude: result.route.start_latitude,
+              longitude: result.route.start_longitude
+            },
+            destination: {
+              name: result.driver_notification.hospital_name,
+              address: 'Hospital Address',
+              latitude: result.route.end_latitude,
+              longitude: result.route.end_longitude
+            },
+            driver: {
+              name: result.driver_notification.driver_name,
+              phone: result.driver.phone || '+91 98765 43210',
+              vehicle_number: result.driver.vehicle_number || 'TN-01-AB-1234'
+            },
+            status: 'pending',
+            created_at: result.route.created_at,
+            distance_km: result.route.distance_km,
+            eta_minutes: result.route.eta_minutes,
+            start_latitude: result.route.start_latitude,
+            start_longitude: result.route.start_longitude,
+            end_latitude: result.route.end_latitude,
+            end_longitude: result.route.end_longitude
+          };
+          
+          // Store route data
+          const existingRoutes = JSON.parse(localStorage.getItem('assignedRoutes') || '[]');
+          existingRoutes.push(routeData);
+          localStorage.setItem('assignedRoutes', JSON.stringify(existingRoutes));
+          
+          console.log('🚚 Route data stored:', routeData);
+        }
+        
+        // Update local blood requests status
+        const bloodRequests = JSON.parse(localStorage.getItem('bloodRequests') || '[]');
+        const updatedRequests = bloodRequests.map(req => {
+          if (req.id === requestId) {
+            return { ...req, status: 'approved', approved_at: new Date().toISOString() };
+          }
+          return req;
+        });
+        localStorage.setItem('bloodRequests', JSON.stringify(updatedRequests));
+        
+        // Refresh data
+        fetchData();
+        
+        // Show success message with driver notification info
+        alert(`✅ Blood request approved successfully!\n\n🚚 Driver notification sent!\n📱 Driver: ${result.driver_notification?.driver_name || 'Unknown'}\n🗺️ Route created: ${result.route.id}\n⏱️ ETA: ${result.route.eta_minutes} minutes\n\nThe driver will now receive a notification to start the route.`);
+        
+      } else {
+        throw new Error(result.message || 'Approval failed');
+      }
+      
+    } catch (error) {
+      console.error('❌ Error approving blood request:', error);
+      
+      // Fallback to localStorage if API fails
+      console.log('🔄 Falling back to localStorage approval...');
+      
       // Update request status in localStorage
       const bloodRequests = JSON.parse(localStorage.getItem('bloodRequests') || '[]');
       const updatedRequests = bloodRequests.map(req => {
@@ -542,7 +658,6 @@ const BloodBankDashboard = () => {
         created_at: new Date().toISOString(),
         distance_km: approvedRequest.distance_km || 15,
         estimated_time: approvedRequest.estimated_time || 25,
-        // Add missing fields for tracking compatibility
         eta_minutes: approvedRequest.estimated_time || 25,
         start_latitude: 13.0827,
         start_longitude: 80.2707,
@@ -558,11 +673,7 @@ const BloodBankDashboard = () => {
       // Refresh data
       fetchData();
       
-      alert(`Blood request approved! Route assigned to driver. Route ID: ${routeData.id}`);
-      
-    } catch (error) {
-      console.error('Error approving blood request:', error);
-      alert('Error approving blood request');
+      alert(`⚠️ API failed, using fallback approval.\n\nBlood request approved! Route assigned to driver. Route ID: ${routeData.id}`);
     }
   };
 
@@ -714,18 +825,70 @@ const BloodBankDashboard = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-gray-600">
-                  View live tracking of blood units being delivered to hospitals
+              {pendingBloodRequests.filter(req => req.status === 'approved').length > 0 ? (
+                <div className="space-y-4">
+                  <div className="text-sm text-gray-600 mb-3">
+                    Active blood delivery routes from your blood bank:
+                  </div>
+                  {pendingBloodRequests
+                    .filter(req => req.status === 'approved')
+                    .map((request, index) => (
+                      <div key={index} className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2 mb-2">
+                              <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                                {request.blood_type}
+                              </Badge>
+                              <Badge variant="secondary" className="bg-green-100 text-green-800">
+                                {request.quantity_ml}ml
+                              </Badge>
+                              <Badge variant="secondary" className="bg-orange-100 text-orange-800">
+                                {request.urgency}
+                              </Badge>
+                            </div>
+                            <p className="text-sm font-medium text-gray-900">
+                              To: {request.hospital_name}
+                            </p>
+                            <p className="text-xs text-gray-600">
+                              Request ID: {request.id}
+                            </p>
+                          </div>
+                          <div className="flex flex-col items-end space-y-2">
+                            <Button 
+                              onClick={() => window.location.href = '/tracking'}
+                              size="sm"
+                              className="bg-blue-600 hover:bg-blue-700"
+                            >
+                              <MapPin className="h-4 w-4 mr-2" />
+                              Track Live
+                            </Button>
+                            <Badge variant="secondary" className="bg-green-100 text-green-800">
+                              Route Active
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                 </div>
-                <Button 
-                  onClick={() => window.location.href = '/tracking'}
-                  className="bg-blue-600 hover:bg-blue-700"
-                >
-                  <MapPin className="h-4 w-4 mr-2" />
-                  View Live Tracking
-                </Button>
-              </div>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-gray-600">
+                    {pendingBloodRequests.filter(req => req.status === 'created').length > 0 
+                      ? 'No active routes yet. Approve requests to start tracking.'
+                      : 'No pending or active blood requests at the moment.'
+                    }
+                  </div>
+                  <Button 
+                    onClick={() => window.location.href = '/tracking'}
+                    className="bg-blue-600 hover:bg-blue-700"
+                    disabled={pendingBloodRequests.filter(req => req.status === 'approved').length === 0}
+                  >
+                    <MapPin className="h-4 w-4 mr-2" />
+                    View Live Tracking
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

@@ -79,16 +79,21 @@ const UnifiedTracking = () => {
       setUserRole(user.role);
     }
 
-    // Get request ID from URL params or location state
+    // Get route ID or request ID from URL params or location state
+    const routeId = location.state?.routeId || new URLSearchParams(location.search).get('routeId');
     const requestId = location.state?.requestId || new URLSearchParams(location.search).get('requestId');
     console.log('📍 Location state:', location.state);
+    console.log('📍 Route ID from location:', routeId);
     console.log('📍 Request ID from location:', requestId);
     
-    if (requestId) {
-      console.log('🔄 Fetching tracking data for request ID:', requestId);
+    if (routeId) {
+      console.log('🔄 Route ID provided, fetching route data directly');
+      fetchRouteData(routeId);
+    } else if (requestId) {
+      console.log('🔄 Request ID provided, fetching tracking data for request ID:', requestId);
       fetchTrackingData(requestId);
     } else {
-      console.log('🔄 No request ID, setting demo data');
+      console.log('🔄 No route ID or request ID, setting demo data');
       // Set demo data for development
       setDemoData();
     }
@@ -124,13 +129,95 @@ const UnifiedTracking = () => {
     }
   };
 
+  const fetchRouteData = async (routeId) => {
+    try {
+      console.log('🔄 Fetching specific route data for route ID:', routeId);
+      
+      // Try authenticated endpoint first
+      let response = await fetch(`/api/routes`, {
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        console.log('⚠️ Authenticated endpoint failed, trying demo endpoint...');
+        // Fallback to demo endpoint
+        response = await fetch(`/api/demo/routes`);
+      }
+      
+      if (response.ok) {
+        const routes = await response.json();
+        console.log('📡 All routes received:', routes);
+        
+        // Find the specific route
+        const route = routes.find(r => r.id === routeId);
+        
+        if (route) {
+          console.log('✅ Found specific route:', route);
+          
+          // Transform API route data to tracking format
+          const routeData = {
+            id: route.id,
+            blood_type: route.request?.blood_type || 'Unknown',
+            quantity_ml: route.request?.quantity_ml || 0,
+            source: {
+              name: route.blood_bank?.name || 'Blood Bank',
+              latitude: route.start_latitude,
+              longitude: route.start_longitude
+            },
+            destination: {
+              name: route.hospital?.name || 'Hospital',
+              latitude: route.end_latitude,
+              longitude: route.end_longitude
+            },
+            driver: {
+              name: route.driver_name || 'Driver',
+              phone: '+91-98765-43210',
+              vehicle_number: 'TN-01-AB-1234'
+            },
+            status: route.status,
+            eta_minutes: route.eta_minutes || 25,
+            progress: 0,
+            distance_km: route.distance_km || 0,
+            created_at: route.created_at
+          };
+          
+          console.log('✅ Transformed route data:', routeData);
+          setTrackingData(routeData);
+          setCurrentStatus(route.status === 'active' ? 'in_transit' : 'waiting');
+        } else {
+          console.log('❌ Route not found, falling back to demo data');
+          setDemoData();
+        }
+      } else {
+        console.log('❌ Both endpoints failed, falling back to demo data');
+        setDemoData();
+      }
+    } catch (error) {
+      console.error('❌ Error fetching route data:', error);
+      setDemoData();
+    }
+  };
+
   const fetchActiveRoutes = async (user) => {
     try {
       console.log('🔄 Fetching active routes for user:', user);
+      console.log('🔍 User details:', {
+        role: user.role,
+        entity_id: user.entity_id,
+        username: user.username,
+        entityDetails: user.entityDetails
+      });
       
-      const response = await fetch('/api/routes', {
+      // Try authenticated endpoint first
+      let response = await fetch('/api/routes', {
         credentials: 'include'
       });
+      
+      if (!response.ok) {
+        console.log('⚠️ Authenticated endpoint failed, trying demo endpoint...');
+        // Fallback to demo endpoint
+        response = await fetch('/api/demo/routes');
+      }
       
       if (response.ok) {
         const routes = await response.json();
@@ -142,9 +229,15 @@ const UnifiedTracking = () => {
           activeRoutes = routes.filter(route => route.status === 'active');
         } else if (user.role === 'hospital') {
           // Get routes for hospital's requests
-          const hospitalRequests = await fetch('/api/emergency_requests', {
+          let hospitalRequests = await fetch('/api/emergency_requests', {
             credentials: 'include'
           });
+          
+          if (!hospitalRequests.ok) {
+            console.log('⚠️ Hospital emergency requests failed, trying demo endpoint...');
+            hospitalRequests = await fetch('/api/demo/emergency_requests');
+          }
+          
           if (hospitalRequests.ok) {
             const requests = await hospitalRequests.json();
             const requestIds = requests.map(req => req.id);
@@ -154,23 +247,50 @@ const UnifiedTracking = () => {
           }
         } else if (user.role === 'blood_bank') {
           // Get routes for blood bank's approved requests
-          const bloodBankRequests = await fetch('/api/emergency_requests', {
-            credentials: 'include'
-          });
-          if (bloodBankRequests.ok) {
-            const requests = await bloodBankRequests.json();
-            const requestIds = requests.map(req => req.id);
+          // Use direct filtering since emergency requests endpoint may fail
+          activeRoutes = routes.filter(route => 
+            route.blood_bank?.id === user.entity_id && route.status === 'active'
+          );
+          
+          // If no routes found, try alternative filtering
+          if (activeRoutes.length === 0) {
+            console.log('🔍 No routes found with direct blood bank ID, trying alternative filtering...');
+            // Try filtering by request_id if we have entity details
             activeRoutes = routes.filter(route => 
-              requestIds.includes(route.request_id) && route.status === 'active'
+              route.status === 'active' && 
+              route.request && 
+              route.request.suggested_bank_id === user.entity_id
             );
           }
+          
+          console.log('🏥 Blood bank filtering results:');
+          console.log('- Total routes:', routes.length);
+          console.log('- User entity ID:', user.entity_id);
+          console.log('- Routes with blood_bank ID:', routes.filter(r => r.blood_bank?.id === user.entity_id).length);
+          console.log('- Active routes found:', activeRoutes.length);
         }
         
         console.log('🚚 Active routes found:', activeRoutes);
+        console.log('🔍 Debug info for user:', user.role);
+        console.log('- User entity ID:', user.entity_id);
+        console.log('- Total routes available:', routes.length);
+        console.log('- Routes with status "active":', routes.filter(r => r.status === 'active').length);
+        if (user.role === 'blood_bank') {
+          console.log('- Routes with blood_bank ID matching user:', routes.filter(r => r.blood_bank?.id === user.entity_id).length);
+          console.log('- Sample route blood_bank IDs:', routes.slice(0, 3).map(r => ({ id: r.id, blood_bank_id: r.blood_bank?.id, status: r.status })));
+        }
         
         if (activeRoutes.length > 0) {
-          const activeRoute = activeRoutes[0]; // Use first active route
-          console.log('✅ Using active route:', activeRoute);
+          // Sort routes by creation time (most recent first) and use the latest one
+          const sortedRoutes = activeRoutes.sort((a, b) => {
+            const timeA = new Date(a.created_at || 0);
+            const timeB = new Date(b.created_at || 0);
+            return timeB - timeA; // Most recent first
+          });
+          
+          const activeRoute = sortedRoutes[0]; // Use most recent active route
+          console.log('✅ Using most recent active route:', activeRoute);
+          console.log('📅 Route creation time:', activeRoute.created_at);
           
           // Transform API route data to tracking format
           const routeData = {

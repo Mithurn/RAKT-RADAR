@@ -449,13 +449,43 @@ def approve_emergency_request(request_id):
         db.session.add(route)
         db.session.commit()
         
+        # Create driver notification after approval
+        try:
+            # Create a notification object for the driver
+            driver_notification = {
+                'id': f'driver_notification_{request_id}',
+                'type': 'route_assigned',
+                'route_id': route.id,
+                'request_id': request_id,
+                'driver_name': driver_user.username,
+                'blood_type': request_obj.blood_type,
+                'quantity_ml': request_obj.quantity_ml,
+                'urgency': request_obj.urgency,
+                'hospital_name': hospital.name,
+                'blood_bank_name': blood_bank.name,
+                'distance_km': distance,
+                'eta_minutes': request_obj.predicted_eta_minutes,
+                'timestamp': datetime.utcnow().isoformat(),
+                'status': 'active',
+                'message': f'🚚 New blood delivery route assigned! {request_obj.blood_type} blood ({request_obj.quantity_ml}ml) from {blood_bank.name} to {hospital.name}. Distance: {distance:.1f}km, ETA: {request_obj.predicted_eta_minutes} minutes.'
+            }
+            
+            # Store notification in database or session for driver to access
+            # For now, we'll add it to the response so frontend can handle it
+            print(f"🔔 Driver notification created: {driver_notification}")
+            
+        except Exception as e:
+            print(f"⚠️ Warning: Could not create driver notification: {e}")
+            # Don't fail the approval if notification fails
+        
         return jsonify({
             'success': True,
             'message': 'Request approved and route created',
             'request': request_obj.to_dict(),
             'route': route.to_dict(),
             'driver': driver.to_dict(),
-            'reserved_units': len(reserved_units)
+            'reserved_units': len(reserved_units),
+            'driver_notification': driver_notification if 'driver_notification' in locals() else None
         }), 200
         
     except Exception as e:
@@ -505,4 +535,132 @@ def cancel_emergency_request(request_id):
         }), 200
         
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@emergency_requests_bp.route('/demo/emergency_requests', methods=['GET'])
+def demo_get_emergency_requests():
+    """Demo endpoint to get emergency requests without authentication (for hackathon demo)"""
+    try:
+        print("🚀 DEMO Emergency Requests endpoint called - returning all requests")
+        
+        # Get all emergency requests for demo purposes
+        requests = EmergencyRequest.query.all()
+        
+        requests_data = []
+        for req in requests:
+            request_dict = req.to_dict()
+            
+            # Get hospital details
+            hospital = Hospital.query.get(req.hospital_id)
+            if hospital:
+                request_dict['hospital'] = hospital.to_dict()
+            
+            # Get blood bank details
+            if req.suggested_bank_id:
+                bank = BloodBank.query.get(req.suggested_bank_id)
+                if bank:
+                    request_dict['blood_bank'] = bank.to_dict()
+            
+            requests_data.append(request_dict)
+        
+        print(f"📡 DEMO Emergency Requests endpoint returning {len(requests_data)} requests")
+        return jsonify(requests_data), 200
+        
+    except Exception as e:
+        print(f"❌ DEMO Emergency Requests endpoint error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@emergency_requests_bp.route('/demo/emergency_requests/<request_id>/approve', methods=['POST'])
+def demo_approve_emergency_request(request_id):
+    """Demo endpoint to approve emergency request without authentication (for hackathon demo)"""
+    try:
+        print(f"🔍 DEMO Approval endpoint called for request: {request_id}")
+        
+        # Get request
+        request_obj = EmergencyRequest.query.get(request_id)
+        if not request_obj:
+            return jsonify({'error': 'Request not found'}), 404
+        
+        # Check if already approved
+        if request_obj.status != 'created':
+            return jsonify({'error': 'Request already processed'}), 400
+        
+        # For demo purposes, use a default blood bank and driver
+        demo_blood_bank_id = '52421b7d-0ce1-4382-ba82-cf9af817761d'  # SRM Blood Bank
+        demo_driver_name = 'demo_driver'
+        
+        # Update request status
+        request_obj.status = 'approved'
+        
+        # Create route
+        hospital = Hospital.query.get(request_obj.hospital_id)
+        blood_bank = BloodBank.query.get(demo_blood_bank_id)
+        
+        if not hospital or not blood_bank:
+            return jsonify({'error': 'Hospital or blood bank not found'}), 404
+        
+        # Calculate route details
+        distance = calculate_distance(
+            blood_bank.latitude, blood_bank.longitude,
+            hospital.latitude, hospital.longitude
+        )
+        
+        route = Route(
+            request_id=request_id,
+            driver_name=demo_driver_name,
+            start_latitude=blood_bank.latitude,
+            start_longitude=blood_bank.longitude,
+            end_latitude=hospital.latitude,
+            end_longitude=hospital.longitude,
+            eta_minutes=request_obj.predicted_eta_minutes,
+            distance_km=distance,
+            status='pending'
+        )
+        
+        db.session.add(route)
+        db.session.commit()
+        
+        # Create driver notification after approval
+        try:
+            # Create a notification object for the driver
+            driver_notification = {
+                'id': f'driver_notification_{request_id}',
+                'type': 'route_assigned',
+                'route_id': route.id,
+                'request_id': request_id,
+                'driver_name': demo_driver_name,
+                'blood_type': request_obj.blood_type,
+                'quantity_ml': request_obj.quantity_ml,
+                'urgency': request_obj.urgency,
+                'hospital_name': hospital.name,
+                'blood_bank_name': blood_bank.name,
+                'distance_km': distance,
+                'eta_minutes': request_obj.predicted_eta_minutes,
+                'timestamp': datetime.utcnow().isoformat(),
+                'status': 'active',
+                'message': f'🚚 New blood delivery route assigned! {request_obj.blood_type} blood ({request_obj.quantity_ml}ml) from {blood_bank.name} to {hospital.name}. Distance: {distance:.1f}km, ETA: {request_obj.predicted_eta_minutes} minutes.'
+            }
+            
+            print(f"🔔 DEMO Driver notification created: {driver_notification}")
+            
+        except Exception as e:
+            print(f"⚠️ Warning: Could not create driver notification: {e}")
+            driver_notification = None
+        
+        return jsonify({
+            'success': True,
+            'message': 'Request approved and route created (DEMO)',
+            'request': request_obj.to_dict(),
+            'route': route.to_dict(),
+            'driver': {
+                'name': demo_driver_name,
+                'phone': '+91-98765-43210',
+                'vehicle_number': 'TN-01-AB-1234'
+            },
+            'reserved_units': 1,
+            'driver_notification': driver_notification
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ DEMO Approval error: {e}")
         return jsonify({'error': str(e)}), 500

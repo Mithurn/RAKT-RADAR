@@ -47,29 +47,71 @@ const DriverRoutes = () => {
       setEntityDetails(JSON.parse(entityData));
     }
 
-    fetchData();
+    // Don't call fetchData here since it's not defined yet
+    // We'll call it in the next useEffect after user/entity are set
     
     // Refresh data every 15 seconds for real-time updates
-    const interval = setInterval(fetchData, 15000);
+    const interval = setInterval(() => {
+      if (typeof fetchData === 'function') {
+        fetchData();
+      }
+    }, 15000);
     return () => clearInterval(interval);
   }, []);
 
-  // Monitor for route start notifications (for when driver starts their own route)
+  // Call fetchData when user and entityDetails are set
+  useEffect(() => {
+    if (user && entityDetails) {
+      console.log('🚚 Driver - User and entity details ready, calling fetchData...');
+      fetchData();
+    }
+  }, [user, entityDetails]);
+
+  // Monitor for route notifications (both route assignments and route starts)
   useEffect(() => {
     const checkRouteNotifications = () => {
       const notifications = JSON.parse(localStorage.getItem('routeNotifications') || '[]');
-      const activeNotifications = notifications.filter(n => 
+      
+      // Check for new route assignments (from blood bank approval)
+      const routeAssignmentNotifications = notifications.filter(n => 
+        n.status === 'active' && 
+        n.type === 'route_assigned' &&
+        new Date(n.timestamp) > new Date(Date.now() - 60000) // Only notifications from last minute
+      );
+      
+      if (routeAssignmentNotifications.length > 0) {
+        const latestNotification = routeAssignmentNotifications[routeAssignmentNotifications.length - 1];
+        console.log('🚚 Driver - New route assignment notification detected:', latestNotification);
+        
+        // Show notification to driver about new route
+        setNotificationMessage(`🚚 New blood delivery route assigned! ${latestNotification.blood_type} blood (${latestNotification.quantity_ml}ml) to ${latestNotification.hospital_name} from ${latestNotification.blood_bank_name}. Distance: ${latestNotification.distance_km}km, ETA: ${latestNotification.eta_minutes} minutes`);
+        setShowNotification(true);
+        
+        // Mark notification as processed
+        const updatedNotifications = notifications.map(n => 
+          n.type === 'route_assigned' ? { ...n, status: 'processed' } : n
+        );
+        localStorage.setItem('routeNotifications', JSON.stringify(updatedNotifications));
+        
+        // Refresh data to show new route
+        if (typeof fetchData === 'function') {
+          fetchData();
+        }
+      }
+      
+      // Check for route start notifications (for when driver starts their own route)
+      const routeStartNotifications = notifications.filter(n => 
         n.status === 'active' && 
         n.type === 'route_started' &&
         new Date(n.timestamp) > new Date(Date.now() - 60000) // Only notifications from last minute
       );
       
-      if (activeNotifications.length > 0) {
-        const latestNotification = activeNotifications[activeNotifications.length - 1];
+      if (routeStartNotifications.length > 0) {
+        const latestNotification = routeStartNotifications[routeStartNotifications.length - 1];
         console.log('🚚 Driver - Route start notification detected:', latestNotification);
         
         // Show notification to driver
-        setRouteNotifications(activeNotifications);
+        setRouteNotifications(routeStartNotifications);
         setShowRouteNotification(true);
         
         // Auto-redirect to tracking after 2 seconds (driver should be faster)
@@ -201,17 +243,45 @@ const DriverRoutes = () => {
       });
       setRoutes(updatedRoutes);
       
-      // Create a route start notification for ALL users (Hospital, Blood Bank, Driver)
-      const routeStartNotification = {
-        id: `route_start_${routeId}`,
-        type: 'route_started',
-        routeId: routeId,
-        routeData: currentRoute,
-        timestamp: new Date().toISOString(),
-        message: `🚚 Blood delivery route started! Driver ${currentRoute.driver?.name || 'Unknown'} is now en route to ${currentRoute.destination?.name || 'Hospital'}`,
-        forUsers: ['hospital', 'blood_bank', 'driver'],
-        status: 'active'
-      };
+      // Use the route start notification from the backend API response
+      let routeStartNotification;
+      if (result.route_start_notification) {
+        // Use the comprehensive notification from backend
+        routeStartNotification = {
+          id: result.route_start_notification.id,
+          type: result.route_start_notification.type,
+          route_id: result.route_start_notification.route_id,
+          request_id: result.route_start_notification.request_id,
+          driver_name: result.route_start_notification.driver_name,
+          blood_type: result.route_start_notification.blood_type,
+          quantity_ml: result.route_start_notification.quantity_ml,
+          urgency: result.route_start_notification.urgency,
+          hospital_name: result.route_start_notification.hospital_name,
+          blood_bank_name: result.route_start_notification.blood_bank_name,
+          distance_km: result.route_start_notification.distance_km,
+          eta_minutes: result.route_start_notification.eta_minutes,
+          start_latitude: result.route_start_notification.start_latitude,
+          start_longitude: result.route_start_notification.start_longitude,
+          end_latitude: result.route_start_notification.end_latitude,
+          end_longitude: result.route_start_notification.end_longitude,
+          timestamp: result.route_start_notification.timestamp,
+          status: result.route_start_notification.status,
+          message: result.route_start_notification.message,
+          for_users: result.route_start_notification.for_users
+        };
+      } else {
+        // Fallback notification if backend doesn't provide one
+        routeStartNotification = {
+          id: `route_start_${routeId}`,
+          type: 'route_started',
+          route_id: routeId,
+          routeData: currentRoute,
+          timestamp: new Date().toISOString(),
+          message: `🚚 Blood delivery route started! Driver ${currentRoute.driver?.name || 'Unknown'} is now en route to ${currentRoute.destination?.name || 'Hospital'}`,
+          for_users: ['hospital', 'blood_bank', 'driver'],
+          status: 'active'
+        };
+      }
       
       // Store notification in localStorage for all users to see
       const existingNotifications = JSON.parse(localStorage.getItem('routeNotifications') || '[]');
@@ -229,12 +299,12 @@ const DriverRoutes = () => {
       console.log('🚚 Route start notification created for all users:', routeStartNotification);
       console.log('🚚 All notifications in localStorage:', existingNotifications);
       
-      console.log('🚚 About to navigate to tracking page with state:', { requestId: routeId, routeData: currentRoute });
+      console.log('🚚 About to navigate to tracking page with state:', { routeId: routeId, routeData: currentRoute });
       
       // Navigate to tracking page
       navigate('/tracking', { 
         state: { 
-          requestId: routeId,
+          routeId: routeId,
           routeData: currentRoute 
         } 
       });

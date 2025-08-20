@@ -82,14 +82,6 @@ const Login = ({ onLoginSuccess }) => {
         
         console.log('Data stored in localStorage'); // Debug log
         
-        // TEMPORARY: Force redirect without callback
-        console.log('FORCING REDIRECT to role:', data.user.role); // Debug log
-        
-        // Force page reload and redirect to centralized dashboard
-        window.location.href = '/dashboard';
-        
-        return; // Exit early
-        
         // Call the parent component's onLoginSuccess to update authentication state
         if (onLoginSuccess) {
           console.log('Calling onLoginSuccess callback'); // Debug log
@@ -98,23 +90,23 @@ const Login = ({ onLoginSuccess }) => {
           console.log('onLoginSuccess callback not provided'); // Debug log
         }
         
-        // Redirect based on role immediately
+        // Redirect based on role using React Router
         console.log('Redirecting to role:', data.user.role); // Debug log
         switch (data.user.role) {
           case 'hospital':
-            window.location.href = '/';
+            navigate('/');
             break;
           case 'blood_bank':
-            window.location.href = '/blood-bank/dashboard';
+            navigate('/blood-bank/dashboard');
             break;
           case 'driver':
-            window.location.href = '/driver/routes';
+            navigate('/driver/routes');
             break;
           case 'admin':
-            window.location.href = '/admin';
+            navigate('/admin');
             break;
           default:
-            window.location.href = '/';
+            navigate('/');
         }
       } else {
         console.log('Login failed:', data.error); // Debug log

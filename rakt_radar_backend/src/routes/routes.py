@@ -130,6 +130,49 @@ def get_routes():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@routes_bp.route('/demo/routes', methods=['GET'])
+def demo_get_routes():
+    """Demo endpoint to get routes without authentication (for hackathon demo)"""
+    try:
+        print("🚀 DEMO Routes endpoint called - returning all routes")
+        
+        # Get all routes for demo purposes
+        routes = Route.query.all()
+        
+        # Include related data
+        routes_data = []
+        for route in routes:
+            route_dict = route.to_dict()
+            
+            # Get request details
+            request_obj = EmergencyRequest.query.get(route.request_id)
+            if request_obj:
+                route_dict['request'] = request_obj.to_dict()
+                
+                # Get hospital details
+                hospital = Hospital.query.get(request_obj.hospital_id)
+                if hospital:
+                    route_dict['hospital'] = hospital.to_dict()
+                
+                # Get blood bank details
+                if request_obj.suggested_bank_id:
+                    bank = BloodBank.query.get(request_obj.suggested_bank_id)
+                    if bank:
+                        route_dict['blood_bank'] = bank.to_dict()
+            
+            # Get tracking points
+            track_points = TrackPoint.query.filter_by(route_id=route.id).order_by(TrackPoint.timestamp).all()
+            route_dict['tracking'] = [point.to_dict() for point in track_points]
+            
+            routes_data.append(route_dict)
+        
+        print(f"📡 DEMO Routes endpoint returning {len(routes_data)} routes")
+        return jsonify(routes_data), 200
+        
+    except Exception as e:
+        print(f"❌ DEMO Routes endpoint error: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @routes_bp.route('/routes/<route_id>', methods=['GET'])
 def get_route(route_id):
     """Get specific route details"""
@@ -313,10 +356,53 @@ def start_route(route_id):
         
         db.session.commit()
         
+        # Create route start notification for ALL users (Hospital, Blood Bank, Driver)
+        try:
+            # Get request details for the notification
+            request_obj = EmergencyRequest.query.get(route.request_id)
+            if request_obj:
+                # Get hospital and blood bank details
+                hospital = Hospital.query.get(request_obj.hospital_id)
+                blood_bank = BloodBank.query.get(request_obj.suggested_bank_id) if request_obj.suggested_bank_id else None
+                
+                # Create comprehensive route start notification
+                route_start_notification = {
+                    'id': f'route_start_{route_id}',
+                    'type': 'route_started',
+                    'route_id': route_id,
+                    'request_id': route.request_id,
+                    'driver_name': route.driver_name,
+                    'blood_type': request_obj.blood_type,
+                    'quantity_ml': request_obj.quantity_ml,
+                    'urgency': request_obj.urgency,
+                    'hospital_name': hospital.name if hospital else 'Unknown Hospital',
+                    'blood_bank_name': blood_bank.name if blood_bank else 'Unknown Blood Bank',
+                    'distance_km': route.distance_km,
+                    'eta_minutes': route.eta_minutes,
+                    'start_latitude': route.start_latitude,
+                    'start_longitude': route.start_longitude,
+                    'end_latitude': route.end_latitude,
+                    'end_longitude': route.end_longitude,
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'status': 'active',
+                    'message': f'🚚 Blood delivery route started! Driver {route.driver_name} is now en route to {hospital.name if hospital else "Hospital"} with {request_obj.blood_type} blood ({request_obj.quantity_ml}ml). ETA: {route.eta_minutes} minutes.',
+                    'for_users': ['hospital', 'blood_bank', 'driver']
+                }
+                
+                print(f"🔔 Route start notification created: {route_start_notification}")
+                
+                # Store notification in database or session for all users to access
+                # For now, we'll add it to the response so frontend can handle it
+                
+        except Exception as e:
+            print(f"⚠️ Warning: Could not create route start notification: {e}")
+            route_start_notification = None
+        
         return jsonify({
             'success': True,
             'message': 'Route started successfully',
-            'route': route.to_dict()
+            'route': route.to_dict(),
+            'route_start_notification': route_start_notification
         }), 200
         
     except Exception as e:

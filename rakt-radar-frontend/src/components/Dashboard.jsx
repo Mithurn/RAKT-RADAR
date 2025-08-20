@@ -29,6 +29,10 @@ const Dashboard = () => {
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [liveCounter, setLiveCounter] = useState(0);
   
+  // Notification states
+  const [routeNotifications, setRouteNotifications] = useState([]);
+  const [showRouteNotification, setShowRouteNotification] = useState(false);
+  
   // Live counter timer effect
   useEffect(() => {
     const timer = setInterval(() => {
@@ -41,6 +45,49 @@ const Dashboard = () => {
   useEffect(() => {
     fetchData();
   }, []); // Only run once on mount
+
+  // Monitor for route start notifications and redirect to tracking
+  useEffect(() => {
+    const checkRouteNotifications = () => {
+      const notifications = JSON.parse(localStorage.getItem('routeNotifications') || '[]');
+      
+      // Check for route start notifications
+      const activeNotifications = notifications.filter(n =>
+        n.status === 'active' &&
+        n.type === 'route_started' &&
+        new Date(n.timestamp) > new Date(Date.now() - 60000) // Only notifications from last minute
+      );
+      
+      if (activeNotifications.length > 0) {
+        const latestNotification = activeNotifications[activeNotifications.length - 1];
+        console.log('🏥 Hospital - Route start notification detected:', latestNotification);
+        
+        // Show notification to user
+        setRouteNotifications(activeNotifications);
+        setShowRouteNotification(true);
+        
+        // Auto-redirect to tracking after 3 seconds
+        setTimeout(() => {
+          console.log('🏥 Hospital - Auto-redirecting to tracking page...');
+          
+          // Mark notification as processed
+          const updatedNotifications = notifications.map(n =>
+            n.id === latestNotification.id ? { ...n, status: 'processed' } : n
+          );
+          localStorage.setItem('routeNotifications', JSON.stringify(updatedNotifications));
+          
+          // Navigate to tracking page
+          window.location.href = '/tracking';
+        }, 3000);
+      }
+    };
+
+    // Check immediately and then every 2 seconds
+    checkRouteNotifications();
+    const interval = setInterval(checkRouteNotifications, 2000);
+    
+    return () => clearInterval(interval);
+  }, []);
 
   const fetchData = async () => {
     try {
@@ -340,6 +387,47 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Route Start Notification */}
+      {showRouteNotification && routeNotifications.length > 0 && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md mx-4 shadow-xl">
+            <div className="flex items-center mb-4">
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                <MapPin className="h-6 w-6 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">🚚 Route Started!</h3>
+                <p className="text-sm text-gray-600">Blood delivery is now in progress</p>
+              </div>
+            </div>
+            
+            <div className="mb-4">
+              <p className="text-gray-700">
+                {routeNotifications[routeNotifications.length - 1]?.message || 'Driver has started the route'}
+              </p>
+            </div>
+            
+            <div className="flex justify-end space-x-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowRouteNotification(false)}
+              >
+                Dismiss
+              </Button>
+              <Button
+                onClick={() => {
+                  setShowRouteNotification(false);
+                  window.location.href = '/tracking';
+                }}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                View Live Tracking
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
