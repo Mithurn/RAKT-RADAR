@@ -62,3 +62,45 @@ nosetests.xml
 coverage.xml
 *.cover
 .hypothesis/
+
+# RAKT-RADAR specific files to ignore
+# Cookie files (contain sensitive data)
+cookies.txt
+bank_cookies.txt
+driver_cookies.txt
+
+# Test files (not needed in production)
+test_*.py
+test_*.js
+test_*.jsx
+
+# Development and demo scripts (not needed in production)
+start_app.sh
+start_app.bat
+start_hackathon_demo.sh
+simple_start.py
+reset_route_status.py
+
+# Lock files (use package.json instead)
+package-lock.json
+pnpm-lock.yaml
+
+# Temporary and working files
+working
+integration_test_results.md
+
+# Documentation files that are not essential
+AI_AGENT_PROMPT.md
+FINAL_DEMO_READY_SUMMARY.md
+HACKATHON_DEPLOYMENT_GUIDE.md
+HACKATHON_DEMO_SCRIPT.md
+DEMO_SCRIPT.md
+QUICK_START.md
+REGION_DEPLOYMENT_GUIDE.md
+DEPLOYMENT_GUIDE.md
+LINUX_SETUP.sh
+MACOS_SETUP.sh
+WINDOWS_SETUP.bat
+project_summary.md
+system_design.md
+MANUAL_STARTUP.md
