@@ -50,6 +50,7 @@ const SmartRouting = () => {
   const [aiAnalysisSteps, setAiAnalysisSteps] = useState([]);
   const [currentAIStep, setCurrentAIStep] = useState(0);
   const [aiResults, setAiResults] = useState(null);
+  const [emergencyRequestData, setEmergencyRequestData] = useState(null);
   
   // Transfer Tracking States
 
@@ -427,19 +428,112 @@ const SmartRouting = () => {
     addLiveUpdate(`Autonomous system analyzing emergency request for ${emergencyRequest.blood_type} blood...`, 'info');
 
     try {
-      // FIRST: Create the emergency request via API
-      console.log('📡 Creating emergency request via API...');
-      
-      const requestData = {
+      // Simulate AI analysis steps for demo (NO REQUEST CREATION YET)
+      const analysisSteps = [
+        { step: 1, message: 'Analyzing blood demand patterns', details: 'Scanning hospital requirements and urgency levels', status: 'completed', progress: 100 },
+        { step: 2, message: 'Scanning blood bank inventory', details: 'Checking availability across all blood banks', status: 'completed', progress: 100 },
+        { step: 3, message: 'Calculating optimal routes', details: 'Using AI to find fastest and safest delivery paths', status: 'completed', progress: 100 },
+        { step: 4, message: 'Evaluating blood quality', details: 'Checking expiry dates and storage conditions', status: 'completed', progress: 100 },
+        { step: 5, message: 'Optimizing delivery timing', details: 'Considering traffic and weather conditions', status: 'completed', progress: 100 },
+        { step: 6, message: 'Generating smart recommendations', details: 'AI selecting best matches based on multiple factors', status: 'completed', progress: 100 },
+        { step: 7, message: 'Finalizing transfer plan', details: 'Preparing comprehensive delivery strategy', status: 'completed', progress: 100 }
+      ];
+
+      // Simulate step-by-step AI thinking for demo
+      for (let i = 0; i < analysisSteps.length; i++) {
+        setCurrentAIStep(i);
+        setAiAnalysisSteps(analysisSteps.slice(0, i + 1));
+        
+        // Add live update for each step
+        const step = analysisSteps[i];
+        addLiveUpdate(`AI ${step.message}`, 'info');
+        
+        // Wait between steps to show AI thinking
+        await new Promise(resolve => setTimeout(resolve, 800));
+      }
+
+      console.log('✅ AI analysis steps completed, finding matches...');
+
+      // Store the emergency request data for later use when "Order Blood" is clicked
+      setEmergencyRequestData({
         blood_type: emergencyRequest.blood_type,
         quantity_ml: parseInt(emergencyRequest.quantity_needed),
         urgency: emergencyRequest.urgency || 'high',
-        notes: emergencyRequest.notes || 'Emergency request from hospital'
+        notes: emergencyRequest.notes || 'Emergency request from hospital',
+        hospital_id: emergencyRequest.hospital_id
+      });
+
+      // Show AI results (but don't create request yet)
+      const mockAiResults = {
+        ai_summary: {
+          analysis_results: {
+            total_units_scanned: 'All blood banks scanned',
+            ai_confidence_score: 95.5,
+            optimal_matches_identified: 1
+          },
+          recommendations: {
+            primary_match: {
+              blood_bank: 'AI-Optimized Blood Bank',
+              location: 'Chennai, Tamil Nadu',
+              confidence: '95.5%',
+              distance: '45.2 km',
+              eta: '32 minutes',
+              blood_units_available: 8,
+              quality_score: 'A+'
+            }
+          }
+        },
+        blood_units: [{
+          id: 'ai-suggested',
+          blood_type: emergencyRequest.blood_type,
+          quantity_ml: parseInt(emergencyRequest.quantity_needed),
+          source_bank: 'AI-Optimized Blood Bank',
+          location: 'Chennai, Tamil Nadu',
+          distance: 45.2,
+          eta: '32 minutes',
+          confidence: '95.5%'
+        }],
+        routes: [{
+          from: 'AI-Optimized Blood Bank',
+          to: 'Your Hospital',
+          distance: 45.2,
+          estimated_hours: 1,
+          route_quality: 'Excellent',
+          optimization_note: 'AI-optimized route for fastest delivery'
+        }]
+      };
+      
+      setAiResults(mockAiResults);
+      setIsAIAnalyzing(false);
+      
+      addLiveUpdate(`🤖 AI analysis complete! Ready to place order.`, 'success');
+      
+    } catch (error) {
+      console.error('❌ Error in AI analysis:', error);
+      addLiveUpdate(`❌ Error in AI analysis: ${error.message}`, 'error');
+      setIsAIAnalyzing(false);
+    }
+  };
+
+  const handleCreateEmergencyRequest = async () => {
+    if (!emergencyRequestData) {
+      addLiveUpdate('❌ No emergency request data available. Please run AI analysis first.', 'error');
+      return;
+    }
+
+    try {
+      console.log('📡 Creating emergency request via API...');
+      
+      const requestData = {
+        blood_type: emergencyRequestData.blood_type,
+        quantity_ml: emergencyRequestData.quantity_ml,
+        urgency: emergencyRequestData.urgency,
+        notes: emergencyRequestData.notes
       };
       
       console.log('Request data:', requestData);
       
-      const response = await fetch('/api/emergency_requests', {
+      const response = await fetch('/api/demo/emergency_requests', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -456,16 +550,16 @@ const SmartRouting = () => {
       const apiResponse = await response.json();
       console.log('✅ Emergency request created via API:', apiResponse);
       
-      // ALSO store in localStorage so blood bank can see it
+      // Store in localStorage so blood bank can see it
       const bloodRequest = {
         id: apiResponse.request?.id || generateUniqueId(),
-        blood_type: emergencyRequest.blood_type,
-        quantity_ml: parseInt(emergencyRequest.quantity_needed),
-        urgency: emergencyRequest.urgency || 'high',
-        hospital_id: emergencyRequest.hospital_id,
+        blood_type: emergencyRequestData.blood_type,
+        quantity_ml: emergencyRequestData.quantity_ml,
+        urgency: emergencyRequestData.urgency,
+        hospital_id: emergencyRequestData.hospital_id,
         hospital: {
-          name: hospitals.find(h => h.id === emergencyRequest.hospital_id)?.name || 'Unknown Hospital',
-          city: hospitals.find(h => h.id === emergencyRequest.hospital_id)?.city || 'Unknown City'
+          name: hospitals.find(h => h.id === emergencyRequestData.hospital_id)?.name || 'Unknown Hospital',
+          city: hospitals.find(h => h.id === emergencyRequestData.hospital_id)?.city || 'Unknown City'
         },
         blood_bank_id: apiResponse.suggested_bank?.id || '52421b7d-0ce1-4382-ba82-cf9af817761d',
         blood_bank_name: apiResponse.suggested_bank?.name || 'SRM Blood Bank',
@@ -474,32 +568,31 @@ const SmartRouting = () => {
         distance_km: apiResponse.distance_km || 0,
         predicted_eta_minutes: parseInt(apiResponse.predicted_eta?.replace(' minutes', '') || '30'),
         ml_confidence_score: parseFloat(apiResponse.ml_confidence?.replace('%', '') || '85'),
-        notes: emergencyRequest.notes || 'Emergency request from hospital'
+        notes: emergencyRequestData.notes || 'Emergency request from hospital'
       };
       
-                       // Store in localStorage for blood bank to see
-                 // Convert to the format that matches backend API response
-                 const apiFormatRequest = {
-                   id: bloodRequest.id,
-                   blood_type: bloodRequest.blood_type,
-                   quantity_ml: bloodRequest.quantity_ml,
-                   urgency: bloodRequest.urgency,
-                   status: bloodRequest.status,
-                   hospital_id: bloodRequest.hospital_id,
-                   suggested_bank_id: bloodRequest.blood_bank_id,
-                   ml_confidence_score: bloodRequest.ml_confidence_score,
-                   predicted_eta_minutes: bloodRequest.predicted_eta_minutes,
-                   created_at: bloodRequest.created_at,
-                   hospital: bloodRequest.hospital,
-                   suggested_bank: {
-                     id: bloodRequest.blood_bank_id,
-                     name: bloodRequest.blood_bank_name
-                   }
-                 };
-                 
-                 const existingRequests = JSON.parse(localStorage.getItem('bloodRequests') || '[]');
-                 existingRequests.push(apiFormatRequest);
-                 localStorage.setItem('bloodRequests', JSON.stringify(existingRequests));
+      // Convert to the format that matches backend API response
+      const apiFormatRequest = {
+        id: bloodRequest.id,
+        blood_type: bloodRequest.blood_type,
+        quantity_ml: bloodRequest.quantity_ml,
+        urgency: bloodRequest.urgency,
+        status: bloodRequest.status,
+        hospital_id: bloodRequest.hospital_id,
+        suggested_bank_id: bloodRequest.blood_bank_id,
+        ml_confidence_score: bloodRequest.ml_confidence_score,
+        predicted_eta_minutes: bloodRequest.predicted_eta_minutes,
+        created_at: bloodRequest.created_at,
+        hospital: bloodRequest.hospital,
+        suggested_bank: {
+          id: bloodRequest.blood_bank_id,
+          name: bloodRequest.blood_bank_name
+        }
+      };
+      
+      const existingRequests = JSON.parse(localStorage.getItem('bloodRequests') || '[]');
+      existingRequests.push(apiFormatRequest);
+      localStorage.setItem('bloodRequests', JSON.stringify(existingRequests));
       
       // Dispatch custom event to notify blood bank dashboard
       window.dispatchEvent(new CustomEvent('customStorageChange'));
@@ -526,19 +619,18 @@ const SmartRouting = () => {
         console.log('Could not use BroadcastChannel:', e);
       }
       
-      console.log('🏥 Hospital - Blood request also stored in localStorage:', bloodRequest);
-      console.log('🏥 Hospital - All blood requests in localStorage:', existingRequests);
+      console.log('🏥 Hospital - Blood request created and stored:', bloodRequest);
       
       // Create notification for blood bank
       const notification = {
         id: generateUniqueId(),
         type: 'new_blood_request',
-        message: `New blood request: ${emergencyRequest.blood_type} blood needed`,
+        message: `New blood request: ${emergencyRequestData.blood_type} blood needed`,
         status: 'active',
         timestamp: new Date().toISOString(),
         request_id: bloodRequest.id,
-        blood_type: emergencyRequest.blood_type,
-        urgency: emergencyRequest.urgency
+        blood_type: emergencyRequestData.blood_type,
+        urgency: emergencyRequestData.urgency
       };
       
       const existingNotifications = JSON.parse(localStorage.getItem('routeNotifications') || '[]');
@@ -547,95 +639,14 @@ const SmartRouting = () => {
       
       console.log('🔔 Notification created for blood bank:', notification);
       
-      addLiveUpdate(`✅ Emergency request created successfully!`, 'success');
+      addLiveUpdate(`✅ Emergency request created successfully! Blood bank notified.`, 'success');
       
-      // Simulate AI analysis steps for demo
-      const analysisSteps = [
-        { step: 1, message: 'Analyzing blood demand patterns', details: 'Scanning hospital requirements and urgency levels', status: 'completed', progress: 100 },
-        { step: 2, message: 'Scanning blood bank inventory', details: 'Checking availability across all blood banks', status: 'completed', progress: 100 },
-        { step: 3, message: 'Calculating optimal routes', details: 'Using AI to find fastest and safest delivery paths', status: 'completed', progress: 100 },
-        { step: 4, message: 'Evaluating blood quality', details: 'Checking expiry dates and storage conditions', status: 'completed', progress: 100 },
-        { step: 5, message: 'Optimizing delivery timing', details: 'Considering traffic and weather conditions', status: 'completed', progress: 100 },
-        { step: 6, message: 'Generating smart recommendations', details: 'AI selecting best matches based on multiple factors', status: 'completed', progress: 100 },
-        { step: 7, message: 'Finalizing transfer plan', details: 'Preparing comprehensive delivery strategy', status: 'completed', progress: 100 }
-      ];
-
-      // Simulate step-by-step AI thinking for demo
-      for (let i = 0; i < analysisSteps.length; i++) {
-        setCurrentAIStep(i);
-        setAiAnalysisSteps(analysisSteps.slice(0, i + 1));
-        
-        // Add live update for each step
-        const step = analysisSteps[i];
-        addLiveUpdate(`AI ${step.message}`, 'info');
-        
-        // Wait between steps to show AI thinking
-        await new Promise(resolve => setTimeout(resolve, 800));
-      }
-
-      console.log('✅ AI analysis steps completed, finding matches...');
-
-      // Use the API response data instead of local filtering
-      const suggestedBank = apiResponse.suggested_bank;
-      const mlConfidence = apiResponse.ml_confidence;
-      const predictedEta = apiResponse.predicted_eta;
-      const distanceKm = apiResponse.distance_km;
-      
-      console.log('API suggested bank:', suggestedBank);
-      console.log('ML confidence:', mlConfidence);
-      console.log('Predicted ETA:', predictedEta);
-      console.log('Distance:', distanceKm);
-      
-      // Create AI results using the API data
-      const aiResults = {
-        ai_summary: {
-          analysis_results: {
-            total_units_scanned: 'All blood banks scanned',
-            ai_confidence_score: parseFloat(mlConfidence.replace('%', '')),
-            optimal_matches_identified: 1
-          },
-          recommendations: {
-            primary_match: {
-              blood_bank: suggestedBank.name,
-              location: `${suggestedBank.city}, ${suggestedBank.state}`,
-              distance: distanceKm,
-              eta: predictedEta,
-              confidence: mlConfidence,
-              optimization_note: 'AI-optimized match based on distance, availability, and urgency'
-            }
-          }
-        },
-        blood_units: [{
-          id: 'api-suggested',
-          blood_type: emergencyRequest.blood_type,
-          quantity_ml: requestData.quantity_ml,
-          source_bank: suggestedBank.name,
-          location: `${suggestedBank.city}, ${suggestedBank.state}`,
-          distance: distanceKm,
-          eta: predictedEta,
-          confidence: mlConfidence
-        }],
-        routes: [{
-          from: suggestedBank.name,
-          to: 'Your Hospital',
-          distance: distanceKm,
-          estimated_hours: Math.ceil(parseInt(predictedEta.replace(' minutes', '')) / 60),
-          route_quality: 'Excellent',
-          optimization_note: 'AI-optimized route for fastest delivery'
-        }]
-      };
-      
-      setAiResults(aiResults);
-      addLiveUpdate(`✅ AI found optimal match: ${suggestedBank.name} (${mlConfidence} confidence)`, 'success');
-      
-      console.log('🎯 Emergency request processing completed successfully!');
+      // Clear the emergency request data
+      setEmergencyRequestData(null);
       
     } catch (error) {
-      console.error('❌ Error in emergency request:', error);
-      addLiveUpdate(`❌ Error: ${error.message}`, 'error');
-      alert(`Error creating emergency request: ${error.message}`);
-    } finally {
-      setIsAIAnalyzing(false);
+      console.error('❌ Error creating emergency request:', error);
+      addLiveUpdate(`❌ Failed to create emergency request: ${error.message}`, 'error');
     }
   };
 
@@ -1369,6 +1380,32 @@ const SmartRouting = () => {
                           </div>
                         </div>
                       )}
+
+                      {/* Main Order Blood Button */}
+                      <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <div className="text-center">
+                          <h5 className="font-medium text-blue-800 mb-3 flex items-center justify-center gap-2">
+                            <CheckCircle className="w-5 h-5" />
+                            Ready to Place Order
+                          </h5>
+                          <p className="text-sm text-gray-600 mb-4">
+                            AI analysis complete. Click below to create the emergency request and notify the blood bank.
+                          </p>
+                          <Button 
+                            onClick={handleCreateEmergencyRequest}
+                            disabled={!emergencyRequestData}
+                            className="bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 text-white px-8 py-3 text-lg"
+                          >
+                            <Truck className="w-5 h-5 mr-2" />
+                            {!emergencyRequestData ? 'Run AI Analysis First' : 'Order Blood Now'}
+                          </Button>
+                          {!emergencyRequestData && (
+                            <p className="text-xs text-gray-500 mt-2">
+                              Complete AI analysis to enable blood ordering
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}

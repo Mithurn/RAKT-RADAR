@@ -32,7 +32,11 @@ const Dashboard = () => {
   // Notification states
   const [routeNotifications, setRouteNotifications] = useState([]);
   const [showRouteNotification, setShowRouteNotification] = useState(false);
+  const [showLoadingScreen, setShowLoadingScreen] = useState(false);
   
+  // Listen for route approved events (when blood bank approves routes)
+
+
   // Live counter timer effect
   useEffect(() => {
     const timer = setInterval(() => {
@@ -41,6 +45,8 @@ const Dashboard = () => {
     
     return () => clearInterval(timer);
   }, []);
+  
+
 
   useEffect(() => {
     fetchData();
@@ -49,36 +55,31 @@ const Dashboard = () => {
   // Monitor for route start notifications and redirect to tracking
   useEffect(() => {
     const checkRouteNotifications = () => {
-      const notifications = JSON.parse(localStorage.getItem('routeNotifications') || '[]');
+      // Simple check for route approval
+      const routeApproved = localStorage.getItem('routeApproved');
+      const routeApprovedAt = localStorage.getItem('routeApprovedAt');
       
-      // Check for route start notifications
-      const activeNotifications = notifications.filter(n =>
-        n.status === 'active' &&
-        n.type === 'route_started' &&
-        new Date(n.timestamp) > new Date(Date.now() - 60000) // Only notifications from last minute
-      );
-      
-      if (activeNotifications.length > 0) {
-        const latestNotification = activeNotifications[activeNotifications.length - 1];
-        console.log('🏥 Hospital - Route start notification detected:', latestNotification);
+      if (routeApproved === 'true' && routeApprovedAt) {
+        const approvedTime = new Date(routeApprovedAt);
+        const now = new Date();
+        const timeDiff = now - approvedTime;
         
-        // Show notification to user
-        setRouteNotifications(activeNotifications);
-        setShowRouteNotification(true);
-        
-        // Auto-redirect to tracking after 3 seconds
-        setTimeout(() => {
-          console.log('🏥 Hospital - Auto-redirecting to tracking page...');
+        // Only redirect if the approval was recent (within last 30 seconds)
+        if (timeDiff < 30000) {
+          console.log('🏥 Hospital - Route approved detected! Redirecting to tracking...');
           
-          // Mark notification as processed
-          const updatedNotifications = notifications.map(n =>
-            n.id === latestNotification.id ? { ...n, status: 'processed' } : n
-          );
-          localStorage.setItem('routeNotifications', JSON.stringify(updatedNotifications));
+          // Clear the flag
+          localStorage.removeItem('routeApproved');
+          localStorage.removeItem('routeApprovedAt');
           
-          // Navigate to tracking page
-          window.location.href = '/tracking';
-        }, 3000);
+          // Show loading screen and redirect
+          setShowLoadingScreen(true);
+          
+          setTimeout(() => {
+            console.log('🚀 Redirecting hospital to tracking page...');
+            window.location.href = '/tracking';
+          }, 2000);
+        }
       }
     };
 
@@ -151,6 +152,19 @@ const Dashboard = () => {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600"></div>
+      </div>
+    );
+  }
+
+  // Show loading screen when route is approved
+  if (showLoadingScreen) {
+    return (
+      <div className="fixed inset-0 bg-white flex items-center justify-center z-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-red-600 mx-auto mb-4"></div>
+          <h2 className="text-2xl font-bold text-gray-900">Route Approved!</h2>
+          <p className="text-gray-600">Redirecting to tracking page in a moment.</p>
+        </div>
       </div>
     );
   }
@@ -228,6 +242,50 @@ const Dashboard = () => {
               {isLoading ? 'Refreshing...' : 'Refresh Data'}
             </Button>
           </div>
+        </div>
+
+        {/* Test Tracking Page */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <h3 className="text-lg font-semibold text-blue-800 mb-2">🧪 Test Tracking Page</h3>
+          <p className="text-blue-700 mb-3">Test the tracking page with sample data</p>
+          <button
+            onClick={() => {
+              console.log('🧪 Testing tracking page...');
+              const testRouteData = {
+                id: 'test_route_123',
+                blood_type: 'O+',
+                quantity_ml: 500,
+                source: {
+                  name: 'Test Blood Bank',
+                  latitude: 13.0827,
+                  longitude: 80.2707
+                },
+                destination: {
+                  name: 'Test Hospital',
+                  latitude: 13.0569,
+                  longitude: 80.2425
+                },
+                driver: {
+                  name: 'Test Driver',
+                  phone: '+91 98765 43210',
+                  vehicle_number: 'TN-01-AB-1234'
+                },
+                status: 'pending',
+                eta_minutes: 25,
+                distance_km: 15,
+                created_at: new Date().toISOString()
+              };
+              
+              // Store test data
+              localStorage.setItem('approvedRouteData', JSON.stringify(testRouteData));
+              
+              // Navigate to tracking page
+              window.location.href = '/tracking';
+            }}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+          >
+            🧪 Test Tracking Page
+          </button>
         </div>
 
         {/* Live System Status */}

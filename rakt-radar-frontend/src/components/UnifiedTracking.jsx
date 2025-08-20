@@ -79,6 +79,49 @@ const UnifiedTracking = () => {
       setUserRole(user.role);
     }
 
+    // Check for approved route data from localStorage first
+    const approvedRouteData = localStorage.getItem('approvedRouteData');
+    if (approvedRouteData) {
+      try {
+        const routeData = JSON.parse(approvedRouteData);
+        console.log('✅ Found approved route data in localStorage:', routeData);
+        
+        // Transform the data to match tracking format
+        const trackingData = {
+          id: routeData.id,
+          blood_type: routeData.blood_type,
+          quantity_ml: routeData.quantity_ml,
+          source: {
+            name: routeData.source.name,
+            latitude: routeData.source.latitude,
+            longitude: routeData.source.longitude
+          },
+          destination: {
+            name: routeData.destination.name,
+            latitude: routeData.destination.latitude,
+            longitude: routeData.destination.longitude
+          },
+          driver: {
+            name: routeData.driver.name,
+            phone: routeData.driver.phone,
+            vehicle_number: routeData.driver.vehicle_number
+          },
+          status: routeData.status || 'pending',
+          eta_minutes: routeData.eta_minutes || 25,
+          progress: 0,
+          distance_km: routeData.distance_km || 0,
+          created_at: routeData.created_at
+        };
+        
+        console.log('✅ Setting tracking data from approved route:', trackingData);
+        setTrackingData(trackingData);
+        setCurrentStatus('pending');
+        return; // Exit early since we have data
+      } catch (error) {
+        console.error('❌ Error parsing approved route data:', error);
+      }
+    }
+
     // Get route ID or request ID from URL params or location state
     const routeId = location.state?.routeId || new URLSearchParams(location.search).get('routeId');
     const requestId = location.state?.requestId || new URLSearchParams(location.search).get('requestId');

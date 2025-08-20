@@ -36,8 +36,35 @@ const BloodBankDashboard = () => {
   const [assignedRoutes, setAssignedRoutes] = useState([]);
   const [routeNotifications, setRouteNotifications] = useState([]);
   const [showRouteNotification, setShowRouteNotification] = useState(false);
+  const [showLoadingScreen, setShowLoadingScreen] = useState(false);
 
   const navigate = useNavigate();
+
+  // Listen for route approved events (when other pages approve routes)
+  useEffect(() => {
+    const handleRouteApproved = (event) => {
+      console.log('🏥 Blood Bank - Route approved event received:', event.detail);
+      const { routeData } = event.detail;
+      
+      // Set a flag in localStorage to indicate route approval
+      localStorage.setItem('routeApproved', 'true');
+      localStorage.setItem('routeApprovedAt', new Date().toISOString());
+      
+      // Show loading screen and redirect to tracking
+      setShowLoadingScreen(true);
+      
+      setTimeout(() => {
+        console.log('🚀 Redirecting blood bank to tracking page from event...');
+        navigate('/tracking');
+      }, 2000);
+    };
+    
+    window.addEventListener('routeApproved', handleRouteApproved);
+    
+    return () => {
+      window.removeEventListener('routeApproved', handleRouteApproved);
+    };
+  }, [navigate]);
 
   // Define fetchData first using useCallback (before any useEffect that uses it)
   const fetchData = useCallback(async () => {
@@ -73,12 +100,11 @@ const BloodBankDashboard = () => {
             console.log('🔍 Blood Bank - Backend API response:', requests);
             console.log('🔍 Blood Bank - Total requests received:', requests.length);
             
-            // Filter requests for this blood bank (where suggested_bank_id matches)
+            // For hackathon demo: Show ALL pending requests (not just assigned to this blood bank)
             const pendingRequests = requests.filter(request => {
               // Include both 'created' and 'pending_approval' statuses
               const validStatuses = ['created', 'pending_approval'];
-              const matches = validStatuses.includes(request.status) && 
-                            request.suggested_bank_id === entityDetails.id;
+              const matches = validStatuses.includes(request.status);
               console.log(`🔍 Blood Bank - Request ${request.id}: status=${request.status}, suggested_bank_id=${request.suggested_bank_id}, matches=${matches}`);
               return matches;
             });
@@ -140,11 +166,10 @@ const BloodBankDashboard = () => {
     const allBloodRequests = JSON.parse(localStorage.getItem('bloodRequests') || '[]');
     console.log('🔍 Blood Bank - All blood requests from localStorage:', allBloodRequests);
     
-    // Use the same filtering logic as the API
+    // For hackathon demo: Show ALL pending requests
     const validStatuses = ['created', 'pending_approval'];
     const pendingRequests = allBloodRequests.filter(request => 
-      validStatuses.includes(request.status) && 
-      request.blood_bank_id === entityDetails.id
+      validStatuses.includes(request.status)
     );
     
     console.log('🔍 Blood Bank - Pending requests from localStorage:', pendingRequests);
@@ -279,9 +304,106 @@ const BloodBankDashboard = () => {
     };
   }, [fetchData]);
 
+  // Enhanced real-time updates for instant notification
+  useEffect(() => {
+    if (!user || !entityDetails) return;
+
+    console.log('🔌 Blood Bank - Setting up enhanced real-time listeners...');
+
+    // Function to refresh data immediately
+    const refreshDataImmediately = () => {
+      console.log('⚡ Blood Bank - Immediate refresh triggered');
+      fetchData();
+    };
+
+    // Listen for custom events from hospital
+    const handleCustomEvent = () => {
+      console.log('📡 Blood Bank - Custom event received, immediate refresh');
+      refreshDataImmediately();
+    };
+
+    // Listen for localStorage changes
+    const handleStorageChange = (e) => {
+      if (e.key === 'bloodRequests' || e.key === 'bloodRequestsUpdate') {
+        console.log('📡 Blood Bank - localStorage change detected, immediate refresh');
+        refreshDataImmediately();
+      }
+    };
+
+    // Listen for BroadcastChannel messages
+    let broadcastChannel = null;
+    try {
+      if (window.BroadcastChannel) {
+        broadcastChannel = new BroadcastChannel('rakt-radar-updates');
+        broadcastChannel.onmessage = (event) => {
+          if (event.data.type === 'new_blood_request') {
+            console.log('📡 Blood Bank - BroadcastChannel: New blood request, immediate refresh');
+            refreshDataImmediately();
+          }
+        };
+        console.log('✅ Blood Bank - Enhanced BroadcastChannel listener active');
+      }
+    } catch (e) {
+      console.log('⚠️ Blood Bank - BroadcastChannel not available:', e);
+    }
+
+    // Set up event listeners
+    window.addEventListener('customStorageChange', handleCustomEvent);
+    window.addEventListener('storage', handleStorageChange);
+
+    // Also poll every 2 seconds for immediate updates
+    const quickPollInterval = setInterval(() => {
+      if (user && entityDetails) {
+        fetchData();
+      }
+    }, 2000);
+
+    console.log('✅ Blood Bank - Enhanced real-time listeners active (2s polling + events)');
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('customStorageChange', handleCustomEvent);
+      window.removeEventListener('storage', handleStorageChange);
+      if (broadcastChannel) {
+        broadcastChannel.close();
+      }
+      clearInterval(quickPollInterval);
+      console.log('🧹 Blood Bank - Enhanced real-time listeners cleaned up');
+    };
+  }, [user, entityDetails]);
+
   // Monitor for route start notifications and redirect to tracking
   useEffect(() => {
     const checkRouteNotifications = () => {
+      // Check if a route was approved (simple localStorage check)
+      const routeApproved = localStorage.getItem('routeApproved');
+      const routeApprovedAt = localStorage.getItem('routeApprovedAt');
+      
+      if (routeApproved === 'true' && routeApprovedAt) {
+        const approvedTime = new Date(routeApprovedAt);
+        const now = new Date();
+        const timeDiff = now - approvedTime;
+        
+        // Only redirect if the approval was recent (within last 10 seconds)
+        if (timeDiff < 10000) {
+          console.log('🏥 Blood Bank - Route approved flag detected in localStorage, redirecting...');
+          
+          // Clear the flag
+          localStorage.removeItem('routeApproved');
+          localStorage.removeItem('routeApprovedAt');
+          
+          // Show loading screen and redirect
+          setShowLoadingScreen(true);
+          
+          setTimeout(() => {
+            console.log('🚀 Redirecting blood bank to tracking page from localStorage check...');
+            navigate('/tracking');
+          }, 2000);
+          
+          return; // Exit early since we're redirecting
+        }
+      }
+      
       const notifications = JSON.parse(localStorage.getItem('routeNotifications') || '[]');
       
       // Check for new blood request notifications
@@ -337,13 +459,77 @@ const BloodBankDashboard = () => {
           navigate('/tracking');
         }, 3000);
       }
+      
+      // Also check for global route started notifications
+      const globalNotifications = JSON.parse(localStorage.getItem('globalNotifications') || '[]');
+      const activeGlobalRouteStartedNotifications = globalNotifications.filter(n => 
+        n.status === 'active' && 
+        n.type === 'route_started' &&
+        new Date(n.timestamp) > new Date(Date.now() - 60000) // Only notifications from last minute
+      );
+      
+      if (activeGlobalRouteStartedNotifications.length > 0) {
+        const latestGlobalNotification = activeGlobalRouteStartedNotifications[activeGlobalRouteStartedNotifications.length - 1];
+        console.log('🏥 Blood Bank - Global route started notification detected:', latestGlobalNotification);
+        
+        // Show notification
+        setRouteNotifications([latestGlobalNotification]);
+        setShowRouteNotification(true);
+        
+        // Auto-redirect to tracking after 3 seconds
+        setTimeout(() => {
+          console.log('🏥 Blood Bank - Auto-redirecting to tracking page from global notification...');
+          
+          // Mark global notification as processed
+          const updatedGlobalNotifications = globalNotifications.map(n => 
+            n.id === latestGlobalNotification.id ? { ...n, status: 'processed' } : n
+          );
+          localStorage.setItem('globalNotifications', JSON.stringify(updatedGlobalNotifications));
+          
+          // Navigate to tracking page
+          navigate('/tracking');
+        }, 3000);
+      }
     };
 
     // Check immediately and then every 2 seconds
     checkRouteNotifications();
     const interval = setInterval(checkRouteNotifications, 2000);
     
-    return () => clearInterval(interval);
+    // Listen for global route started events
+    const handleGlobalRouteStarted = (event) => {
+      console.log('🏥 Blood Bank - Global route started event received:', event.detail);
+      const { notification, routeData } = event.detail;
+      
+      console.log('🏥 Blood Bank - Route started notification received, redirecting to tracking...');
+      
+      // Show notification
+      setRouteNotifications([notification]);
+      setShowRouteNotification(true);
+      
+      // Auto-redirect to tracking after 3 seconds
+      setTimeout(() => {
+        console.log('🏥 Blood Bank - Auto-redirecting to tracking page...');
+        
+        // Mark global notification as processed
+        const globalNotifications = JSON.parse(localStorage.getItem('globalNotifications') || '[]');
+        const updatedGlobalNotifications = globalNotifications.map(n => 
+          n.id === notification.id ? { ...n, status: 'processed' } : n
+        );
+        localStorage.setItem('globalNotifications', JSON.stringify(updatedGlobalNotifications));
+        
+        // Navigate to tracking page
+        navigate('/tracking');
+      }, 3000);
+    };
+    
+    // Listen for global route started events
+    window.addEventListener('globalRouteStarted', handleGlobalRouteStarted);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('globalRouteStarted', handleGlobalRouteStarted);
+    };
   }, [navigate, user, entityDetails, fetchData]);
 
   // Debug: Monitor pendingBloodRequests state changes
@@ -508,6 +694,7 @@ const BloodBankDashboard = () => {
 
   const handleApproveBloodRequest = async (requestId) => {
     try {
+      console.log('🏥 Blood Bank - handleApproveBloodRequest FUNCTION CALLED!');
       console.log('🏥 Blood Bank - Approving request via API:', requestId);
       
       // Call the DEMO API endpoint to approve the request (no authentication required)
@@ -524,6 +711,8 @@ const BloodBankDashboard = () => {
       
       const result = await response.json();
       console.log('🏥 Blood Bank - API approval response:', result);
+      console.log('🏥 Blood Bank - Driver notification driver_name:', result.driver_notification?.driver_name);
+      console.log('🏥 Blood Bank - Driver object:', result.driver);
       
       if (result.success) {
         // Create driver notification for the approved request
@@ -554,6 +743,11 @@ const BloodBankDashboard = () => {
           console.log('🔔 Driver notification stored:', driverNotification);
           
           // Also store the route data for tracking
+          console.log('🔄 Creating route data from result:', result);
+          console.log('🔄 Route object:', result.route);
+          console.log('🔄 Driver notification:', result.driver_notification);
+          console.log('🔄 Driver name from notification:', result.driver_notification.driver_name);
+          
           const routeData = {
             id: result.route.id,
             request_id: requestId,
@@ -562,36 +756,142 @@ const BloodBankDashboard = () => {
             source: {
               name: result.driver_notification.blood_bank_name,
               address: 'Blood Bank Address',
-              latitude: result.route.start_latitude,
-              longitude: result.route.start_longitude
+              latitude: result.route.start_latitude || 13.0827,
+              longitude: result.route.start_longitude || 80.2707
             },
             destination: {
               name: result.driver_notification.hospital_name,
               address: 'Hospital Address',
-              latitude: result.route.end_latitude,
-              longitude: result.route.end_longitude
+              latitude: result.route.end_latitude || 13.0827,
+              longitude: result.route.end_longitude || 80.2707
             },
             driver: {
-              name: result.driver_notification.driver_name,
-              phone: result.driver.phone || '+91 98765 43210',
-              vehicle_number: result.driver.vehicle_number || 'TN-01-AB-1234'
+              name: result.driver_notification.driver_name, // Use the driver name from notification
+              phone: result.driver?.phone || '+91 98765 43210',
+              vehicle_number: result.driver?.vehicle_number || 'TN-01-AB-1234'
             },
             status: 'pending',
             created_at: result.route.created_at,
-            distance_km: result.route.distance_km,
-            eta_minutes: result.route.eta_minutes,
-            start_latitude: result.route.start_latitude,
-            start_longitude: result.route.start_longitude,
-            end_latitude: result.route.end_latitude,
-            end_longitude: result.route.end_longitude
+            distance_km: result.route.distance_km || 0,
+            eta_minutes: result.route.eta_minutes || 30,
+            start_latitude: result.route.start_latitude || 13.0827,
+            start_longitude: result.route.start_longitude || 80.2707,
+            end_latitude: result.route.end_latitude || 13.0827,
+            end_longitude: result.route.end_longitude || 80.2707
           };
           
           // Store route data
-          const existingRoutes = JSON.parse(localStorage.getItem('assignedRoutes') || '[]');
-          existingRoutes.push(routeData);
-          localStorage.setItem('assignedRoutes', JSON.stringify(existingRoutes));
+          console.log('🔄 About to store route data in localStorage...');
+          console.log('🔄 Current assignedRoutes in localStorage:', localStorage.getItem('assignedRoutes'));
+          console.log('🔄 Route data to be stored:', routeData);
+          console.log('🔄 Driver name in routeData:', routeData.driver.name);
           
-          console.log('🚚 Route data stored:', routeData);
+          const existingRoutes = JSON.parse(localStorage.getItem('assignedRoutes') || '[]');
+          console.log('🔄 Parsed existing routes:', existingRoutes);
+          
+          existingRoutes.push(routeData);
+          console.log('🔄 Routes after adding new route:', existingRoutes);
+          
+          try {
+            localStorage.setItem('assignedRoutes', JSON.stringify(existingRoutes));
+            console.log('✅ Successfully stored in localStorage');
+            
+            // Verify storage
+            const verifyStorage = localStorage.getItem('assignedRoutes');
+            console.log('✅ Verification - localStorage now contains:', verifyStorage);
+          } catch (error) {
+            console.error('❌ Error storing in localStorage:', error);
+          }
+          
+          // Dispatch custom event to notify driver dashboard
+          window.dispatchEvent(new CustomEvent('routeAssigned', { detail: routeData }));
+          console.log('📡 Custom event dispatched: routeAssigned');
+          
+          // Also dispatch a storage event for cross-tab communication
+          const storageEvent = new StorageEvent('storage', {
+            key: 'routeNotifications',
+            newValue: JSON.stringify(existingNotifications),
+            oldValue: JSON.stringify(existingNotifications.slice(0, -1)),
+            url: window.location.href
+          });
+          window.dispatchEvent(storageEvent);
+          console.log('📡 Storage event dispatched for cross-tab communication');
+          
+          // Force a localStorage update to trigger storage events
+          localStorage.setItem('routeNotifications', JSON.stringify(existingNotifications));
+          console.log('📡 localStorage updated to trigger storage events');
+          
+          // Create a global notification that persists across tabs
+          const globalNotification = {
+            id: `global_${Date.now()}`,
+            type: 'route_assigned',
+            data: routeData,
+            timestamp: new Date().toISOString(),
+            status: 'active'
+          };
+          
+          // Store in a special global notifications key
+          const globalNotifications = JSON.parse(localStorage.getItem('globalNotifications') || '[]');
+          globalNotifications.push(globalNotification);
+          localStorage.setItem('globalNotifications', JSON.stringify(globalNotifications));
+          
+          // Dispatch a global custom event
+          window.dispatchEvent(new CustomEvent('globalRouteAssigned', { 
+            detail: { 
+              notification: globalNotification,
+              routeData: routeData 
+            } 
+          }));
+          console.log('📡 Global route assigned event dispatched');
+          
+          // Test: Dispatch a test event to see if the driver is listening
+          console.log('🧪 Testing notification system...');
+          console.log('🧪 Driver username expected:', routeData.driver.name);
+          console.log('🧪 Global notification created:', globalNotification);
+          console.log('🧪 All global notifications:', globalNotifications);
+          
+          // Force a test notification to appear immediately
+          setTimeout(() => {
+            console.log('🧪 Dispatching test notification after 1 second...');
+            window.dispatchEvent(new CustomEvent('globalRouteAssigned', { 
+              detail: { 
+                notification: globalNotification,
+                routeData: routeData 
+              } 
+            }));
+          }, 1000);
+          
+          // Also dispatch immediately for immediate testing
+          console.log('🧪 Dispatching immediate test notification...');
+          window.dispatchEvent(new CustomEvent('globalRouteAssigned', { 
+            detail: { 
+              notification: globalNotification,
+              routeData: routeData 
+            } 
+          }));
+          
+          // Create a simple test notification that should definitely work
+          const testNotification = {
+            id: `test_${Date.now()}`,
+            type: 'route_assigned',
+            data: routeData,
+            timestamp: new Date().toISOString(),
+            status: 'active'
+          };
+          
+          // Store test notification
+          const testNotifications = JSON.parse(localStorage.getItem('testNotifications') || '[]');
+          testNotifications.push(testNotification);
+          localStorage.setItem('testNotifications', JSON.stringify(testNotifications));
+          
+          // Dispatch test event
+          window.dispatchEvent(new CustomEvent('testRouteAssigned', { 
+            detail: { 
+              notification: testNotification,
+              routeData: routeData 
+            } 
+          }));
+          console.log('🧪 Test notification dispatched:', testNotification);
         }
         
         // Update local blood requests status
@@ -607,8 +907,25 @@ const BloodBankDashboard = () => {
         // Refresh data
         fetchData();
         
-        // Show success message with driver notification info
-        alert(`✅ Blood request approved successfully!\n\n🚚 Driver notification sent!\n📱 Driver: ${result.driver_notification?.driver_name || 'Unknown'}\n🗺️ Route created: ${result.route.id}\n⏱️ ETA: ${result.route.eta_minutes} minutes\n\nThe driver will now receive a notification to start the route.`);
+        // SIMPLIFIED: Show loading screen and redirect blood bank to tracking
+        console.log('🚀 Route approved! Showing loading screen and redirecting to tracking...');
+        
+        // Store the approved route data for tracking page to access
+        localStorage.setItem('approvedRouteData', JSON.stringify(routeData));
+        localStorage.setItem('routeApproved', 'true');
+        localStorage.setItem('routeApprovedAt', new Date().toISOString());
+        
+        // Show loading screen and redirect to tracking
+        setShowLoadingScreen(true);
+        
+        // Redirect to tracking after 2 seconds (show loading screen)
+        setTimeout(() => {
+          console.log('🚀 Redirecting blood bank to tracking page...');
+          navigate('/tracking');
+        }, 2000);
+        
+        // Refresh data
+        fetchData();
         
       } else {
         throw new Error(result.message || 'Approval failed');
@@ -670,10 +987,75 @@ const BloodBankDashboard = () => {
       existingRoutes.push(routeData);
       localStorage.setItem('assignedRoutes', JSON.stringify(existingRoutes));
 
+      // SIMPLIFIED: Show loading screen and redirect all pages to tracking (fallback)
+      console.log('🚀 Fallback route approved! Redirecting all pages to tracking...');
+      
+      // Store the approved route data for all pages to access
+      localStorage.setItem('approvedRouteData', JSON.stringify(routeData));
+      localStorage.setItem('routeApproved', 'true');
+      localStorage.setItem('routeApprovedAt', new Date().toISOString());
+      
+      // Force a localStorage change to trigger cross-tab events
+      const timestamp = Date.now();
+      localStorage.setItem('routeApprovedTimestamp', timestamp.toString());
+      
+      // Show loading screen and redirect to tracking
+      setShowLoadingScreen(true);
+      
+      // Redirect to tracking after 2 seconds (show loading screen)
+      setTimeout(() => {
+        console.log('🚀 Redirecting blood bank to tracking page (fallback)...');
+        navigate('/tracking');
+      }, 2000);
+      
+      // Also notify other pages to redirect (simple approach)
+      window.dispatchEvent(new CustomEvent('routeApproved', { 
+        detail: { routeData: routeData } 
+      }));
+      
+      // MORE AGGRESSIVE: Force all pages to check for approval (fallback)
+      // Set multiple flags to ensure detection
+      localStorage.setItem('forceRedirect', 'true');
+      localStorage.setItem('redirectTarget', '/tracking');
+      localStorage.setItem('redirectReason', 'route_approved_fallback');
+      
+      // Also set a flag that expires in 5 seconds
+      setTimeout(() => {
+        localStorage.removeItem('forceRedirect');
+        localStorage.removeItem('redirectTarget');
+        localStorage.removeItem('redirectReason');
+      }, 5000);
+      
+      // Dispatch multiple events to ensure delivery
+      ['routeApproved', 'forceRedirect', 'globalRedirect'].forEach(eventName => {
+        window.dispatchEvent(new CustomEvent(eventName, { 
+          detail: { 
+            routeData: routeData,
+            action: 'redirect_to_tracking',
+            target: '/tracking'
+          } 
+        }));
+      });
+      
+      console.log('🚀 Multiple notification channels activated (fallback)! All pages should redirect now.');
+      
+      // SIMPLE SOLUTION: Use a polling approach that definitely works
+      // Set a flag that other tabs can check every second
+      localStorage.setItem('POLLING_ROUTE_APPROVED', 'true');
+      localStorage.setItem('POLLING_TIMESTAMP', Date.now().toString());
+      localStorage.setItem('POLLING_ROUTE_DATA', JSON.stringify(routeData));
+      
+      // Clear the flag after 10 seconds
+      setTimeout(() => {
+        localStorage.removeItem('POLLING_ROUTE_APPROVED');
+        localStorage.removeItem('POLLING_TIMESTAMP');
+        localStorage.removeItem('POLLING_ROUTE_DATA');
+      }, 10000);
+      
+      console.log('✅ POLLING FLAGS SET! Other tabs should detect this within 1 second.');
+      
       // Refresh data
       fetchData();
-      
-      alert(`⚠️ API failed, using fallback approval.\n\nBlood request approved! Route assigned to driver. Route ID: ${routeData.id}`);
     }
   };
 
@@ -692,11 +1074,12 @@ const BloodBankDashboard = () => {
       // Refresh data
       fetchData();
       
-      alert('Blood request rejected.');
+      // Show rejection message without alert
+      console.log('❌ Blood request rejected');
       
     } catch (error) {
       console.error('Error rejecting blood request:', error);
-      alert('Error rejecting blood request');
+      console.log('❌ Error rejecting blood request');
     }
   };
 
@@ -781,6 +1164,16 @@ const BloodBankDashboard = () => {
                 ×
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showLoadingScreen && (
+        <div className="fixed inset-0 bg-white flex items-center justify-center z-50">
+          <div className="text-center">
+            <Droplets className="w-16 h-16 text-blue-500 animate-spin mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-gray-900">Processing Request...</h2>
+            <p className="text-gray-600">Redirecting to tracking page in a moment.</p>
           </div>
         </div>
       )}
@@ -1172,7 +1565,10 @@ const BloodBankDashboard = () => {
 
                     <div className="flex gap-2">
                       <Button 
-                        onClick={() => handleApproveBloodRequest(request.id)}
+                        onClick={() => {
+                          console.log('🔘 Approve button clicked for request:', request.id);
+                          handleApproveBloodRequest(request.id);
+                        }}
                         size="sm"
                         className="bg-green-600 hover:bg-green-700"
                       >
@@ -1522,6 +1918,218 @@ const BloodBankDashboard = () => {
             </CardContent>
           </Card>
         )}
+
+        {/* Test Notification Button */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              🧪 Test Notification System
+            </CardTitle>
+            <CardDescription>
+              Test if the driver notification system is working
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button 
+              onClick={() => {
+                console.log('🧪 Manual test notification button clicked');
+                
+                // Create a test route data
+                const testRouteData = {
+                  id: `test_${Date.now()}`,
+                  request_id: 'test_request',
+                  blood_type: 'A+',
+                  quantity_ml: 500,
+                  source: {
+                    name: 'Test Blood Bank',
+                    address: 'Test Address',
+                    latitude: 13.0827,
+                    longitude: 80.2707
+                  },
+                  destination: {
+                    name: 'Test Hospital',
+                    address: 'Test Hospital Address',
+                    latitude: 13.0569,
+                    longitude: 80.2425
+                  },
+                  driver: {
+                    name: 'demo_driver',
+                    phone: '+91 98765 43210',
+                    vehicle_number: 'TN-01-AB-1234'
+                  },
+                  status: 'pending',
+                  created_at: new Date().toISOString(),
+                  distance_km: 15,
+                  eta_minutes: 25,
+                  start_latitude: 13.0827,
+                  start_longitude: 80.2707,
+                  end_latitude: 13.0569,
+                  end_longitude: 80.2425
+                };
+                
+                // Create test notification
+                const testNotification = {
+                  id: `manual_test_${Date.now()}`,
+                  type: 'route_assigned',
+                  data: testRouteData,
+                  timestamp: new Date().toISOString(),
+                  status: 'active'
+                };
+                
+                // Store test notification
+                const testNotifications = JSON.parse(localStorage.getItem('testNotifications') || '[]');
+                testNotifications.push(testNotification);
+                localStorage.setItem('testNotifications', JSON.stringify(testNotifications));
+                
+                // Dispatch test event
+                window.dispatchEvent(new CustomEvent('testRouteAssigned', { 
+                  detail: { 
+                    notification: testNotification,
+                    routeData: testRouteData 
+                  } 
+                }));
+                
+                console.log('🧪 Manual test notification dispatched:', testNotification);
+                alert('🧪 Test notification sent! Check the driver page console for details.');
+              }}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+              🧪 Send Test Notification to Driver
+            </Button>
+            
+            <Button 
+              onClick={() => {
+                console.log('🧪 Testing loading screen workflow...');
+                
+                // Test the localStorage flag setting
+                const testRouteData = {
+                  id: `test_${Date.now()}`,
+                  request_id: 'test_request',
+                  blood_type: 'A+',
+                  quantity_ml: 500,
+                  source: { name: 'Test Blood Bank' },
+                  destination: { name: 'Test Hospital' },
+                  driver: { name: 'demo_driver' },
+                  status: 'pending'
+                };
+                
+                // Set the flags that should trigger loading screens
+                localStorage.setItem('approvedRouteData', JSON.stringify(testRouteData));
+                localStorage.setItem('routeApproved', 'true');
+                localStorage.setItem('routeApprovedAt', new Date().toISOString());
+                
+                // Dispatch the event
+                window.dispatchEvent(new CustomEvent('routeApproved', { 
+                  detail: { routeData: testRouteData } 
+                }));
+                
+                console.log('🧪 Test loading screen workflow triggered');
+                alert('🧪 Loading screen workflow test triggered! Check all three pages for loading screens.');
+              }}
+              className="bg-blue-600 hover:bg-blue-700 ml-2"
+            >
+              🧪 Test Loading Screen Workflow
+            </Button>
+            
+            <Button 
+              onClick={() => {
+                console.log('🧪 Testing cross-tab notification system...');
+                
+                // Test the cross-tab notification system
+                const testRouteData = {
+                  id: `cross_tab_test_${Date.now()}`,
+                  request_id: 'cross_tab_test',
+                  blood_type: 'B+',
+                  quantity_ml: 300,
+                  source: { name: 'Test Blood Bank' },
+                  destination: { name: 'Test Hospital' },
+                  driver: { name: 'demo_driver' },
+                  status: 'pending'
+                };
+                
+                // Set the flags that should trigger cross-tab notifications
+                localStorage.setItem('approvedRouteData', JSON.stringify(testRouteData));
+                localStorage.setItem('routeApproved', 'true');
+                localStorage.setItem('routeApprovedAt', new Date().toISOString());
+                
+                // Force a localStorage change to trigger cross-tab events
+                const timestamp = Date.now();
+                localStorage.setItem('routeApprovedTimestamp', timestamp.toString());
+                
+                // Dispatch the event
+                window.dispatchEvent(new CustomEvent('routeApproved', { 
+                  detail: { routeData: testRouteData } 
+                }));
+                
+                // Dispatch a storage event for cross-tab communication
+                const storageEvent = new StorageEvent('storage', {
+                  key: 'routeApproved',
+                  newValue: 'true',
+                  oldValue: null,
+                  url: window.location.href
+                });
+                window.dispatchEvent(storageEvent);
+                
+                console.log('🧪 Cross-tab notification test triggered');
+                alert('🧪 Cross-tab notification test triggered! Check all three pages for loading screens and redirects.');
+              }}
+              className="bg-green-600 hover:bg-green-700 ml-2"
+            >
+              🧪 Test Cross-Tab Notifications
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Test Loading Screen Workflow */}
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+          <h3 className="text-lg font-semibold text-yellow-800 mb-2">🧪 Test Loading Screen Workflow</h3>
+          <p className="text-yellow-700 mb-3">Test the approval workflow with loading screen and redirect</p>
+          <button
+            onClick={() => {
+              console.log('🧪 Testing loading screen workflow...');
+              const testRouteData = {
+                id: 'test_route_123',
+                blood_type: 'O+',
+                quantity_ml: 500,
+                source: {
+                  name: 'Test Blood Bank',
+                  latitude: 13.0827,
+                  longitude: 80.2707
+                },
+                destination: {
+                  name: 'Test Hospital',
+                  latitude: 13.0569,
+                  longitude: 80.2425
+                },
+                driver: {
+                  name: 'Test Driver',
+                  phone: '+91 98765 43210',
+                  vehicle_number: 'TN-01-AB-1234'
+                },
+                status: 'pending',
+                eta_minutes: 25,
+                distance_km: 15,
+                created_at: new Date().toISOString()
+              };
+              
+              // Store test data
+              localStorage.setItem('approvedRouteData', JSON.stringify(testRouteData));
+              localStorage.setItem('routeApproved', 'true');
+              localStorage.setItem('routeApprovedAt', new Date().toISOString());
+              
+              // Show loading screen and redirect
+              setShowLoadingScreen(true);
+              
+              setTimeout(() => {
+                console.log('🧪 Test: Redirecting to tracking page...');
+                navigate('/tracking');
+              }, 2000);
+            }}
+            className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+          >
+            🧪 Test Approval Workflow
+          </button>
+        </div>
       </div>
     </div>
   );

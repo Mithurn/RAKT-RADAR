@@ -33,108 +33,8 @@ const DriverRoutes = () => {
   const [routeTrackingData, setRouteTrackingData] = useState(null);
   const [routeNotifications, setRouteNotifications] = useState([]);
   const [showRouteNotification, setShowRouteNotification] = useState(false);
+  const [showLoadingScreen, setShowLoadingScreen] = useState(false);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    // Get user data from localStorage
-    const userData = localStorage.getItem('user');
-    const entityData = localStorage.getItem('entity_details');
-    
-    if (userData) {
-      setUser(JSON.parse(userData));
-    }
-    if (entityData) {
-      setEntityDetails(JSON.parse(entityData));
-    }
-
-    // Don't call fetchData here since it's not defined yet
-    // We'll call it in the next useEffect after user/entity are set
-    
-    // Refresh data every 15 seconds for real-time updates
-    const interval = setInterval(() => {
-      if (typeof fetchData === 'function') {
-        fetchData();
-      }
-    }, 15000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Call fetchData when user and entityDetails are set
-  useEffect(() => {
-    if (user && entityDetails) {
-      console.log('🚚 Driver - User and entity details ready, calling fetchData...');
-      fetchData();
-    }
-  }, [user, entityDetails]);
-
-  // Monitor for route notifications (both route assignments and route starts)
-  useEffect(() => {
-    const checkRouteNotifications = () => {
-      const notifications = JSON.parse(localStorage.getItem('routeNotifications') || '[]');
-      
-      // Check for new route assignments (from blood bank approval)
-      const routeAssignmentNotifications = notifications.filter(n => 
-        n.status === 'active' && 
-        n.type === 'route_assigned' &&
-        new Date(n.timestamp) > new Date(Date.now() - 60000) // Only notifications from last minute
-      );
-      
-      if (routeAssignmentNotifications.length > 0) {
-        const latestNotification = routeAssignmentNotifications[routeAssignmentNotifications.length - 1];
-        console.log('🚚 Driver - New route assignment notification detected:', latestNotification);
-        
-        // Show notification to driver about new route
-        setNotificationMessage(`🚚 New blood delivery route assigned! ${latestNotification.blood_type} blood (${latestNotification.quantity_ml}ml) to ${latestNotification.hospital_name} from ${latestNotification.blood_bank_name}. Distance: ${latestNotification.distance_km}km, ETA: ${latestNotification.eta_minutes} minutes`);
-        setShowNotification(true);
-        
-        // Mark notification as processed
-        const updatedNotifications = notifications.map(n => 
-          n.type === 'route_assigned' ? { ...n, status: 'processed' } : n
-        );
-        localStorage.setItem('routeNotifications', JSON.stringify(updatedNotifications));
-        
-        // Refresh data to show new route
-        if (typeof fetchData === 'function') {
-          fetchData();
-        }
-      }
-      
-      // Check for route start notifications (for when driver starts their own route)
-      const routeStartNotifications = notifications.filter(n => 
-        n.status === 'active' && 
-        n.type === 'route_started' &&
-        new Date(n.timestamp) > new Date(Date.now() - 60000) // Only notifications from last minute
-      );
-      
-      if (routeStartNotifications.length > 0) {
-        const latestNotification = routeStartNotifications[routeStartNotifications.length - 1];
-        console.log('🚚 Driver - Route start notification detected:', latestNotification);
-        
-        // Show notification to driver
-        setRouteNotifications(routeStartNotifications);
-        setShowRouteNotification(true);
-        
-        // Auto-redirect to tracking after 2 seconds (driver should be faster)
-        setTimeout(() => {
-          console.log('🚚 Driver - Auto-redirecting to tracking page...');
-          
-          // Mark notification as processed
-          const updatedNotifications = notifications.map(n => 
-            n.id === latestNotification.id ? { ...n, status: 'processed' } : n
-          );
-          localStorage.setItem('routeNotifications', JSON.stringify(updatedNotifications));
-          
-          navigate('/tracking');
-        }, 2000);
-      }
-    };
-
-    // Check immediately and then every 2 seconds
-    checkRouteNotifications();
-    const interval = setInterval(checkRouteNotifications, 2000);
-    
-    return () => clearInterval(interval);
-  }, [navigate]);
 
   const fetchData = async () => {
     try {
@@ -189,22 +89,104 @@ const DriverRoutes = () => {
         setShowNotification(true);
       }
       
-      setRoutes(transformedRoutes);
-      setLastUpdated(new Date());
-    } catch (error) {
-      console.error('❌ Error fetching routes:', error);
+      // Always check localStorage for assigned routes (since we use mock routes)
+      console.log('🔄 Checking localStorage for assigned routes...');
+      const assignedRoutes = JSON.parse(localStorage.getItem('assignedRoutes') || '[]');
+      console.log('🔄 Assigned routes from localStorage:', assignedRoutes);
       
-      // Fallback to localStorage if API fails
+      // Filter routes for this driver
+      const driverAssignedRoutes = assignedRoutes.filter(route => 
+        route.driver.name === (user?.username || 'demo_driver')
+      );
+      console.log('🚚 Driver assigned routes:', driverAssignedRoutes);
+      
+      // Combine API routes with localStorage routes
+      const allRoutes = [...transformedRoutes, ...driverAssignedRoutes];
+      console.log('🚚 All routes combined:', allRoutes);
+      
+      setRoutes(allRoutes);
+      setIsLoading(false);
+      
+    } catch (error) {
+      console.error('❌ Error fetching driver routes:', error);
+      
+      // Fallback to localStorage routes
       console.log('🔄 Falling back to localStorage routes...');
       const assignedRoutes = JSON.parse(localStorage.getItem('assignedRoutes') || '[]');
       const driverAssignedRoutes = assignedRoutes.filter(route => 
-        route.driver.name === (user?.name || 'demo_driver')
+        route.driver.name === (user?.username || 'demo_driver')
       );
+      
       setRoutes(driverAssignedRoutes);
-    } finally {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    // Get user data from localStorage
+    const userData = localStorage.getItem('user');
+    const entityData = localStorage.getItem('entity_details');
+    
+    if (userData) {
+      setUser(JSON.parse(userData));
+    }
+    if (entityData) {
+      setEntityDetails(JSON.parse(entityData));
+    }
+
+    // Don't call fetchData here since it's not defined yet
+    // We'll call it in the next useEffect after user/entity are set
+    
+    // Refresh data every 15 seconds for real-time updates
+    const interval = setInterval(() => {
+      if (typeof fetchData === 'function') {
+        fetchData();
+      }
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Call fetchData when user and entityDetails are set
+  useEffect(() => {
+    if (user && entityDetails) {
+      console.log('🚚 Driver - User and entity details ready, calling fetchData...');
+      fetchData();
+    }
+  }, [user, entityDetails, fetchData]);
+
+  // Monitor for route notifications (both route assignments and route starts)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Simple check for route approval
+      const routeApproved = localStorage.getItem('routeApproved');
+      const routeApprovedAt = localStorage.getItem('routeApprovedAt');
+      
+      if (routeApproved === 'true' && routeApprovedAt) {
+        const approvedTime = new Date(routeApprovedAt);
+        const now = new Date();
+        const timeDiff = now - approvedTime;
+        
+        // Only redirect if the approval was recent (within last 30 seconds)
+        if (timeDiff < 30000) {
+          console.log('🚚 Driver - Route approved detected! Redirecting to tracking...');
+          
+          // Clear the flag
+          localStorage.removeItem('routeApproved');
+          localStorage.removeItem('routeApprovedAt');
+          
+          // Show loading screen and redirect
+          setShowLoadingScreen(true);
+          
+          setTimeout(() => {
+            console.log('🚀 Redirecting driver to tracking page...');
+            navigate('/tracking');
+          }, 2000);
+        }
+      }
+    }, 2000); // Check every 2 seconds
+    
+    return () => clearInterval(interval);
+  }, [navigate]);
 
   const handleStartRoute = async (routeId) => {
     try {
@@ -298,6 +280,42 @@ const DriverRoutes = () => {
       
       console.log('🚚 Route start notification created for all users:', routeStartNotification);
       console.log('🚚 All notifications in localStorage:', existingNotifications);
+      
+      // Create a global notification for route start that all pages can see
+      const globalRouteStartNotification = {
+        id: `global_route_start_${routeId}`,
+        type: 'route_started',
+        route_id: routeId,
+        routeData: currentRoute,
+        timestamp: new Date().toISOString(),
+        message: `🚚 Blood delivery route started! Driver ${currentRoute.driver?.name || 'Unknown'} is now en route to ${currentRoute.destination?.name || 'Hospital'}`,
+        for_users: ['hospital', 'blood_bank', 'driver'],
+        status: 'active'
+      };
+      
+      // Store global notification
+      const globalNotifications = JSON.parse(localStorage.getItem('globalNotifications') || '[]');
+      globalNotifications.push(globalRouteStartNotification);
+      localStorage.setItem('globalNotifications', JSON.stringify(globalNotifications));
+      
+      // Dispatch global event for cross-tab communication
+      window.dispatchEvent(new CustomEvent('globalRouteStarted', { 
+        detail: { 
+          notification: globalRouteStartNotification,
+          routeData: currentRoute 
+        } 
+      }));
+      console.log('📡 Global route started event dispatched');
+      
+      // Also dispatch storage event for cross-tab communication
+      const storageEvent = new StorageEvent('storage', {
+        key: 'globalNotifications',
+        newValue: JSON.stringify(globalNotifications),
+        oldValue: JSON.stringify(globalNotifications.slice(0, -1)),
+        url: window.location.href
+      });
+      window.dispatchEvent(storageEvent);
+      console.log('📡 Storage event dispatched for route start');
       
       console.log('🚚 About to navigate to tracking page with state:', { routeId: routeId, routeData: currentRoute });
       
@@ -473,6 +491,17 @@ const DriverRoutes = () => {
         </div>
       )}
 
+      {/* Loading Screen */}
+      {showLoadingScreen && (
+        <div className="fixed inset-0 bg-white bg-opacity-75 flex items-center justify-center z-50">
+          <div className="text-center">
+            <Truck className="w-16 h-16 text-blue-500 animate-spin" />
+            <h2 className="text-2xl font-bold text-gray-900 mt-4">Route Approved!</h2>
+            <p className="text-gray-600 mt-2">Redirecting to tracking page...</p>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
@@ -509,6 +538,133 @@ const DriverRoutes = () => {
             </div>
           </div>
         )}
+
+        {/* Debug Panel */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              🐛 Debug Panel
+            </CardTitle>
+            <CardDescription>
+              Debug information for troubleshooting notifications
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-semibold mb-2">Current User:</h4>
+                <p className="text-sm text-gray-600">
+                  Username: {user?.username || 'Not set'}<br/>
+                  Role: {user?.role || 'Not set'}<br/>
+                  Entity ID: {user?.entity_id || 'Not set'}
+                </p>
+              </div>
+              
+              <div>
+                <h4 className="font-semibold mb-2">Notification Status:</h4>
+                <p className="text-sm text-gray-600">
+                  Global Notifications: {JSON.parse(localStorage.getItem('globalNotifications') || '[]').length}<br/>
+                  Test Notifications: {JSON.parse(localStorage.getItem('testNotifications') || '[]').length}<br/>
+                  Route Notifications: {JSON.parse(localStorage.getItem('routeNotifications') || '[]').length}
+                </p>
+              </div>
+              
+              <div>
+                <h4 className="font-semibold mb-2">Recent Notifications:</h4>
+                <div className="max-h-32 overflow-y-auto text-xs text-gray-600">
+                  {JSON.parse(localStorage.getItem('globalNotifications') || '[]').slice(-3).map((n, i) => (
+                    <div key={i} className="mb-1 p-1 bg-gray-100 rounded">
+                      {n.type}: {n.status} - {new Date(n.timestamp).toLocaleTimeString()}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              <Button 
+                onClick={() => {
+                  console.log('🐛 Debug: Current localStorage state:');
+                  console.log('🐛 globalNotifications:', localStorage.getItem('globalNotifications'));
+                  console.log('🐛 testNotifications:', localStorage.getItem('testNotifications'));
+                  console.log('🐛 routeNotifications:', localStorage.getItem('routeNotifications'));
+                  console.log('🐛 assignedRoutes:', localStorage.getItem('assignedRoutes'));
+                  alert('🐛 Check console for debug information');
+                }}
+                className="bg-gray-600 hover:bg-gray-700"
+              >
+                🐛 Show Debug Info in Console
+              </Button>
+              
+              <Button 
+                onClick={() => {
+                  console.log('🧪 Testing basic event system...');
+                  
+                  // Test if we can dispatch and receive events
+                  const testEvent = new CustomEvent('testEvent', { detail: 'Hello from test button!' });
+                  window.dispatchEvent(testEvent);
+                  
+                  // Test if we can access localStorage
+                  try {
+                    localStorage.setItem('testKey', 'testValue');
+                    const testValue = localStorage.getItem('testKey');
+                    localStorage.removeItem('testKey');
+                    console.log('✅ localStorage test passed:', testValue);
+                  } catch (e) {
+                    console.error('❌ localStorage test failed:', e);
+                  }
+                  
+                  alert('🧪 Basic system test completed! Check console for results.');
+                }}
+                className="bg-green-600 hover:bg-green-700 ml-2"
+              >
+                🧪 Test Basic System
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Test Tracking Page */}
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+          <h3 className="text-lg font-semibold text-green-800 mb-2">🧪 Test Tracking Page</h3>
+          <p className="text-green-700 mb-3">Test the tracking page with sample data</p>
+          <button
+            onClick={() => {
+              console.log('🧪 Testing tracking page...');
+              const testRouteData = {
+                id: 'test_route_123',
+                blood_type: 'O+',
+                quantity_ml: 500,
+                source: {
+                  name: 'Test Blood Bank',
+                  latitude: 13.0827,
+                  longitude: 80.2707
+                },
+                destination: {
+                  name: 'Test Hospital',
+                  latitude: 13.0569,
+                  longitude: 80.2425
+                },
+                driver: {
+                  name: 'Test Driver',
+                  phone: '+91 98765 43210',
+                  vehicle_number: 'TN-01-AB-1234'
+                },
+                status: 'pending',
+                eta_minutes: 25,
+                distance_km: 15,
+                created_at: new Date().toISOString()
+              };
+              
+              // Store test data
+              localStorage.setItem('approvedRouteData', JSON.stringify(testRouteData));
+              
+              // Navigate to tracking page
+              navigate('/tracking');
+            }}
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+          >
+            🧪 Test Tracking Page
+          </button>
+        </div>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

@@ -276,6 +276,79 @@ def get_demo_emergency_requests():
         print(f"❌ Demo endpoint error: {e}")
         return jsonify({'error': str(e)}), 500
 
+@emergency_requests_bp.route('/demo/emergency_requests', methods=['POST'])
+def create_demo_emergency_request():
+    """Demo endpoint to create emergency requests without authentication (for hackathon demo)"""
+    try:
+        print("🔍 Demo endpoint called - creating emergency request")
+        
+        data = request.json
+        blood_type = data.get('blood_type')
+        quantity_ml = data.get('quantity_ml')
+        urgency = data.get('urgency', 'high')
+        notes = data.get('notes', '')
+        
+        if not all([blood_type, quantity_ml]):
+            return jsonify({'error': 'Blood type and quantity are required'}), 400
+        
+        # Validate urgency
+        valid_urgency = ['low', 'medium', 'high', 'critical']
+        if urgency not in valid_urgency:
+            return jsonify({'error': 'Invalid urgency level'}), 400
+        
+        # Use a default hospital ID for demo (first hospital in database)
+        hospital = Hospital.query.first()
+        if not hospital:
+            return jsonify({'error': 'No hospitals found in database'}), 404
+        
+        hospital_id = hospital.id
+        
+        # Call ML service for bank matching
+        suggested_bank, confidence_score = ml_predict_bank(
+            hospital_id, blood_type, quantity_ml, urgency
+        )
+        
+        if not suggested_bank:
+            return jsonify({'error': 'No suitable blood bank found'}), 404
+        
+        # Predict ETA
+        distance = calculate_distance(
+            hospital.latitude, hospital.longitude,
+            suggested_bank.latitude, suggested_bank.longitude
+        )
+        
+        predicted_eta = ml_predict_eta(distance, urgency)
+        
+        # Create emergency request
+        emergency_request = EmergencyRequest(
+            hospital_id=hospital_id,
+            blood_type=blood_type,
+            quantity_ml=quantity_ml,
+            urgency=urgency,
+            notes=notes,
+            suggested_bank_id=suggested_bank.id,
+            ml_confidence_score=confidence_score,
+            predicted_eta_minutes=predicted_eta
+        )
+        
+        db.session.add(emergency_request)
+        db.session.commit()
+        
+        print(f"✅ Demo emergency request created: {blood_type} {quantity_ml}ml")
+        
+        return jsonify({
+            'success': True,
+            'request': emergency_request.to_dict(),
+            'suggested_bank': suggested_bank.to_dict(),
+            'ml_confidence': f"{confidence_score:.1f}%",
+            'predicted_eta': f"{predicted_eta} minutes",
+            'distance_km': f"{distance:.1f} km"
+        }), 201
+        
+    except Exception as e:
+        print(f"❌ Demo endpoint error: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @emergency_requests_bp.route('/emergency_requests/<request_id>', methods=['GET'])
 def get_emergency_request(request_id):
     """Get specific emergency request details"""
@@ -581,30 +654,53 @@ def demo_approve_emergency_request(request_id):
         if not request_obj:
             return jsonify({'error': 'Request not found'}), 404
         
+        print(f"🔍 DEMO Approval - Request found: {request_obj.id}")
+        print(f"🔍 DEMO Approval - Hospital ID: {request_obj.hospital_id}")
+        print(f"🔍 DEMO Approval - Blood Bank ID: {request_obj.suggested_bank_id}")
+        
         # Check if already approved
         if request_obj.status != 'created':
             return jsonify({'error': 'Request already processed'}), 400
         
-        # For demo purposes, use a default blood bank and driver
-        demo_blood_bank_id = '52421b7d-0ce1-4382-ba82-cf9af817761d'  # SRM Blood Bank
+        # For demo purposes, use the assigned blood bank from the request
+        demo_blood_bank_id = request_obj.suggested_bank_id
         demo_driver_name = 'demo_driver'
         
-        # Update request status
-        request_obj.status = 'approved'
+        print(f"🔍 DEMO Approval - Looking for hospital: {request_obj.hospital_id}")
+        print(f"🔍 DEMO Approval - Looking for blood bank: {demo_blood_bank_id}")
         
-        # Create route
+        # Get actual hospital and blood bank data from database
         hospital = Hospital.query.get(request_obj.hospital_id)
         blood_bank = BloodBank.query.get(demo_blood_bank_id)
         
         if not hospital or not blood_bank:
+            print(f"❌ DEMO Approval - Hospital or blood bank not found")
             return jsonify({'error': 'Hospital or blood bank not found'}), 404
         
-        # Calculate route details
+        # Update request status
+        request_obj.status = 'approved'
+        
+        # Get or create driver entity
+        driver = Driver.query.filter_by(name=demo_driver_name).first()
+        if not driver:
+            driver = Driver(
+                name=demo_driver_name,
+                phone="+91-98765-43210",
+                vehicle_number="TN-01-AB-1234"
+            )
+            db.session.add(driver)
+            db.session.flush()
+        
+        # Calculate route details using real coordinates
         distance = calculate_distance(
             blood_bank.latitude, blood_bank.longitude,
             hospital.latitude, hospital.longitude
         )
         
+        # Use default ETA if not set
+        eta_minutes = request_obj.predicted_eta_minutes or 30
+        
+        # Create REAL route in database (not mock)
         route = Route(
             request_id=request_id,
             driver_name=demo_driver_name,
@@ -612,13 +708,15 @@ def demo_approve_emergency_request(request_id):
             start_longitude=blood_bank.longitude,
             end_latitude=hospital.latitude,
             end_longitude=hospital.longitude,
-            eta_minutes=request_obj.predicted_eta_minutes,
+            eta_minutes=eta_minutes,
             distance_km=distance,
             status='pending'
         )
         
         db.session.add(route)
         db.session.commit()
+        
+        print(f"✅ DEMO Approval - Route created in database: {route.id}")
         
         # Create driver notification after approval
         try:
@@ -635,10 +733,10 @@ def demo_approve_emergency_request(request_id):
                 'hospital_name': hospital.name,
                 'blood_bank_name': blood_bank.name,
                 'distance_km': distance,
-                'eta_minutes': request_obj.predicted_eta_minutes,
+                'eta_minutes': eta_minutes,
                 'timestamp': datetime.utcnow().isoformat(),
                 'status': 'active',
-                'message': f'🚚 New blood delivery route assigned! {request_obj.blood_type} blood ({request_obj.quantity_ml}ml) from {blood_bank.name} to {hospital.name}. Distance: {distance:.1f}km, ETA: {request_obj.predicted_eta_minutes} minutes.'
+                'message': f'🚚 New blood delivery route assigned! {request_obj.blood_type} blood ({request_obj.quantity_ml}ml) from {blood_bank.name} to {hospital.name}. Distance: {distance:.1f}km, ETA: {eta_minutes} minutes.'
             }
             
             print(f"🔔 DEMO Driver notification created: {driver_notification}")
@@ -652,11 +750,7 @@ def demo_approve_emergency_request(request_id):
             'message': 'Request approved and route created (DEMO)',
             'request': request_obj.to_dict(),
             'route': route.to_dict(),
-            'driver': {
-                'name': demo_driver_name,
-                'phone': '+91-98765-43210',
-                'vehicle_number': 'TN-01-AB-1234'
-            },
+            'driver': driver.to_dict(),
             'reserved_units': 1,
             'driver_notification': driver_notification
         }), 200
