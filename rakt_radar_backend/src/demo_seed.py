@@ -4,16 +4,27 @@ from datetime import datetime, date, timedelta
 from src.models.user import User, db
 from src.models.models import Hospital, BloodBank, Driver, BloodUnit
 
-def hash_password(password):
-    """Simple password hashing for demo purposes"""
-    return hashlib.sha256(password.encode()).hexdigest()
+# Import the hash function from user.py to ensure consistency
+try:
+    from src.routes.user import hash_password
+    print("✅ Successfully imported hash_password from user.py")
+except ImportError as e:
+    print(f"❌ Failed to import hash_password: {e}")
+    # Fallback to local function
+    def hash_password(password):
+        """Simple password hashing for demo purposes"""
+        return hashlib.sha256(password.encode()).hexdigest()
+    print("⚠️ Using fallback hash_password function")
 
 def seed_demo_users():
     """Seed demo users for all roles"""
     print("🌱 Seeding demo users...")
     
     # Check if users already exist
-    if User.query.count() > 0:
+    existing_users = User.query.count()
+    print(f"🔍 Found {existing_users} existing users in database")
+    
+    if existing_users > 0:
         print("✅ Users already exist, skipping user creation")
         return
     
@@ -26,37 +37,43 @@ def seed_demo_users():
         return
     
     # Create demo users
+    print("🔍 Creating demo users with the following data:")
+    
+    # Show what entities we have
+    print(f"🏥 Hospitals available: {[h.name for h in hospitals[:3]]}")
+    print(f"🩸 Blood banks available: {[b.name for b in blood_banks[:3]]}")
+    
     demo_users = [
-        # Hospital users
+        # Hospital users - SRM Global Hospitals as primary
+        {
+            'username': 'srm_hospital',
+            'email': 'admin@srmhospitals.com',
+            'password': 'hospital123',
+            'role': 'hospital',
+            'entity_id': hospitals[0].id if hospitals else None  # Should be SRM Global Hospitals
+        },
         {
             'username': 'apollo_hospital',
             'email': 'admin@apollohospitals.com',
             'password': 'hospital123',
             'role': 'hospital',
-            'entity_id': hospitals[0].id if hospitals else None
-        },
-        {
-            'username': 'fortis_hospital',
-            'email': 'admin@fortismalar.com',
-            'password': 'hospital123',
-            'role': 'hospital',
             'entity_id': hospitals[1].id if len(hospitals) > 1 else None
         },
         
-        # Blood Bank users
+        # Blood Bank users - Strategic blood banks as primary
         {
-            'username': 'chennai_blood_bank',
+            'username': 'chennai_central_bank',
             'email': 'admin@chennaibloodbank.com',
             'password': 'bank123',
             'role': 'blood_bank',
-            'entity_id': blood_banks[0].id if blood_banks else None
+            'entity_id': blood_banks[0].id if blood_banks else None  # Should be Chennai Central Blood Bank
         },
         {
             'username': 'red_cross_bank',
             'email': 'admin@redcrosschennai.com',
             'password': 'bank123',
             'role': 'blood_bank',
-            'entity_id': blood_banks[1].id if len(blood_banks) > 1 else None
+            'entity_id': blood_banks[1].id if len(blood_banks) > 1 else None  # Should be Red Cross Blood Bank
         },
         
         # Driver users

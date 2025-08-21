@@ -1711,13 +1711,13 @@ const BloodBankDashboard = () => {
                       <div>
                         <p className="text-sm font-medium text-gray-700">Distance</p>
                         <p className="text-sm text-blue-600 font-semibold">
-                          {request.distance_km || 'N/A'} km
+                          {request.calculated_distance_km ? `~${request.calculated_distance_km} km` : 'N/A'}
                         </p>
                       </div>
                       <div>
                         <p className="text-sm font-medium text-gray-700">Estimated Time</p>
                         <p className="text-sm text-green-600 font-semibold">
-                          {request.predicted_eta_minutes ? `${request.predicted_eta_minutes} minutes` : 'N/A'}
+                          {request.calculated_eta_minutes ? `${request.calculated_eta_minutes} minutes` : 'N/A'}
                         </p>
                       </div>
                     </div>

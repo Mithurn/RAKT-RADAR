@@ -77,17 +77,26 @@ const SmartRouting = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Set default hospital when hospitals are loaded
+  // Set default hospital when hospitals are loaded - prioritize SRM Global Hospitals
   useEffect(() => {
     if (hospitals.length > 0 && !emergencyRequest.hospital_id) {
-      // Find SRM Global Hospitals or use the first hospital
+      // Find SRM Global Hospitals specifically
       const srmHospital = hospitals.find(h => h.name.includes('SRM') || h.name.includes('Global'));
-      const defaultHospital = srmHospital || hospitals[0];
-      setEmergencyRequest(prev => ({
-        ...prev,
-        hospital_id: defaultHospital.id
-      }));
-      console.log('Default hospital set:', defaultHospital);
+      if (srmHospital) {
+        setEmergencyRequest(prev => ({
+          ...prev,
+          hospital_id: srmHospital.id
+        }));
+        console.log('🏥 SRM Global Hospitals set as default:', srmHospital.name);
+      } else {
+        // Fallback to first hospital if SRM not found
+        const defaultHospital = hospitals[0];
+        setEmergencyRequest(prev => ({
+          ...prev,
+          hospital_id: defaultHospital.id
+        }));
+        console.log('⚠️ SRM Global Hospitals not found, using:', defaultHospital.name);
+      }
     }
   }, [hospitals, emergencyRequest.hospital_id]);
 
@@ -474,11 +483,11 @@ const SmartRouting = () => {
           },
           recommendations: {
             primary_match: {
-              blood_bank: 'AI-Optimized Blood Bank',
+              blood_bank: 'Chennai Central Blood Bank',
               location: 'Chennai, Tamil Nadu',
               confidence: '95.5%',
-              distance: '45.2 km',
-              eta: '32 minutes',
+              distance: '18.5 km',
+              eta: '22 minutes',
               blood_units_available: 8,
               quality_score: 'A+'
             }
@@ -488,19 +497,19 @@ const SmartRouting = () => {
           id: 'ai-suggested',
           blood_type: emergencyRequest.blood_type,
           quantity_ml: parseInt(emergencyRequest.quantity_needed),
-          source_bank: 'AI-Optimized Blood Bank',
+          source_bank: 'Chennai Central Blood Bank',
           location: 'Chennai, Tamil Nadu',
-          distance: 45.2,
-          eta: '32 minutes',
+          distance: 18.5,  // Realistic distance from Chengalpattu to Chennai
+          eta: '22 minutes',  // Realistic time for 18.5km
           confidence: '95.5%'
         }],
         routes: [{
-          from: 'AI-Optimized Blood Bank',
-          to: 'Your Hospital',
-          distance: 45.2,
-          estimated_hours: 1,
+          from: 'Chennai Central Blood Bank',
+          to: 'SRM Global Hospitals',
+          distance: 18.5,  // Realistic distance
+          estimated_hours: 0.37,  // 22 minutes in hours
           route_quality: 'Excellent',
-          optimization_note: 'AI-optimized route for fastest delivery'
+          optimization_note: 'AI-optimized route for fastest delivery from Chennai to SRM Global Hospitals'
         }]
       };
       
@@ -559,18 +568,39 @@ const SmartRouting = () => {
         urgency: emergencyRequestData.urgency,
         hospital_id: emergencyRequestData.hospital_id,
         hospital: {
-          name: hospitals.find(h => h.id === emergencyRequestData.hospital_id)?.name || 'Unknown Hospital',
-          city: hospitals.find(h => h.id === emergencyRequestData.hospital_id)?.city || 'Unknown City'
+          name: hospitals.find(h => h.id === emergencyRequestData.hospital_id)?.name || 'SRM Global Hospitals',
+          city: hospitals.find(h => h.id === emergencyRequestData.hospital_id)?.city || 'Chengalpattu'
         },
         blood_bank_id: apiResponse.suggested_bank?.id || '52421b7d-0ce1-4382-ba82-cf9af817761d',
-        blood_bank_name: apiResponse.suggested_bank?.name || 'SRM Blood Bank',
+        blood_bank_name: apiResponse.suggested_bank?.name || 'Chennai Central Blood Bank',
         status: 'pending_approval',
         created_at: new Date().toISOString(),
         distance_km: apiResponse.distance_km || 0,
         predicted_eta_minutes: parseInt(apiResponse.predicted_eta?.replace(' minutes', '') || '30'),
         ml_confidence_score: parseFloat(apiResponse.ml_confidence?.replace('%', '') || '85'),
-        notes: emergencyRequestData.notes || 'Emergency request from hospital'
+        notes: emergencyRequestData.notes || 'Emergency request from SRM Global Hospitals'
       };
+      
+      // Update AI results with real API data for consistent display
+      if (aiResults) {
+        const updatedAiResults = {
+          ...aiResults,
+          blood_units: [{
+            ...aiResults.blood_units[0],
+            source_bank: apiResponse.suggested_bank?.name || 'Chennai Central Blood Bank',
+            distance: parseFloat(apiResponse.distance_km) || 18.5,
+            eta: `${apiResponse.predicted_eta || '22 minutes'}`
+          }],
+          routes: [{
+            ...aiResults.routes[0],
+            from: apiResponse.suggested_bank?.name || 'Chennai Central Blood Bank',
+            to: hospitals.find(h => h.id === emergencyRequestData.hospital_id)?.name || 'SRM Global Hospitals',
+            distance: parseFloat(apiResponse.distance_km) || 18.5,
+            estimated_hours: (parseInt(apiResponse.predicted_eta?.replace(' minutes', '')) || 22) / 60
+          }]
+        };
+        setAiResults(updatedAiResults);
+      }
       
       // Convert to the format that matches backend API response
       const apiFormatRequest = {
@@ -677,7 +707,7 @@ const SmartRouting = () => {
     
     // Ensure minimum realistic distance for demo believability
     if (distance < 5) {
-      distance = 5 + Math.random() * 10; // Minimum 5km, up to 15km
+      distance = 15 + Math.random() * 10; // Minimum 15km, up to 25km for realistic regional distances
     }
     
     // Calculate estimated travel time (assuming 60 km/h average for Tamil Nadu roads)

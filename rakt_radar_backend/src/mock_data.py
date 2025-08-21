@@ -40,8 +40,8 @@ BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
 
 # Tamil Nadu specific hospital names (focusing on major hospitals)
 TAMIL_NADU_HOSPITAL_NAMES = [
-    # Major Chennai Hospitals
-    "Apollo Hospitals Chennai", "Fortis Malar Hospital", "MIOT International",
+    # Major Chennai Hospitals - SRM Global Hospitals as primary
+    "SRM Global Hospitals", "Apollo Hospitals Chennai", "Fortis Malar Hospital", "MIOT International",
     "Global Hospitals Chennai", "Kauvery Hospital", "Billroth Hospitals", "Chettinad Hospital",
     "SIMS Hospital", "Vijaya Hospital", "Sundaram Medical Foundation", "Adyar Cancer Institute",
     "Cancer Institute (WIA)", "Government General Hospital", "Government Royapettah Hospital",
@@ -109,33 +109,47 @@ ADDITIONAL_BLOOD_BANK_NAMES = [
 ]
 
 def generate_mock_hospitals(count=40):
-    """Generate mock hospital data for Tamil Nadu network - Evenly distributed"""
+    """Generate mock hospital data for Tamil Nadu network - SRM Global Hospitals priority"""
     hospitals = []
     
-    # Generate diverse hospitals across Tamil Nadu (no SRM Global Hospitals bias)
-    for i in range(count):
+    # First, create SRM Global Hospitals with fixed Chennai coordinates
+    srm_hospital = Hospital(
+        name="SRM Global Hospitals",
+        address="SRM Nagar, Kattankulathur, Chengalpattu, Tamil Nadu",
+        city="Chengalpattu",
+        state="Tamil Nadu",
+        latitude=12.6975,  # Chengalpattu coordinates
+        longitude=79.9876,
+        contact_person="Dr. SRM Director",
+        contact_email="srm.hospitals@srm.edu.in",
+        contact_phone="+91-44-27452222"
+    )
+    hospitals.append(srm_hospital)
+    
+    # Generate remaining hospitals across Tamil Nadu
+    for i in range(count - 1):  # -1 because we already added SRM
         city_data = random.choice(TAMIL_NADU_CITIES)
         # Add realistic variation to coordinates (within city limits)
         lat_variation = random.uniform(-0.02, 0.02)  # Smaller variation for realistic city distances
         lng_variation = random.uniform(-0.02, 0.02)
         
-        # Use a mix of predefined names and generated names for more variety
-        if random.random() < 0.6:  # 60% chance of using predefined names
-            used_names = [h.name for h in hospitals]
-            available_names = [name for name in TAMIL_NADU_HOSPITAL_NAMES if name not in used_names]
-            
-            if not available_names:
-                available_names = TAMIL_NADU_HOSPITAL_NAMES
-            
+        # Ensure unique hospital names by checking against already used names
+        used_names = [h.name for h in hospitals]
+        
+        # Try predefined names first
+        available_names = [name for name in TAMIL_NADU_HOSPITAL_NAMES if f"{name} {city_data['city']}" not in used_names]
+        
+        if available_names:
             hospital_name = f"{random.choice(available_names)} {city_data['city']}"
-        else:  # 40% chance of using additional diverse names
-            used_names = [h.name for h in hospitals]
-            available_names = [name for name in ADDITIONAL_HOSPITAL_NAMES if name not in used_names]
+        else:
+            # Try additional names
+            available_names = [name for name in ADDITIONAL_HOSPITAL_NAMES if f"{name} {city_data['city']}" not in used_names]
             
-            if not available_names:
-                available_names = ADDITIONAL_HOSPITAL_NAMES
-            
-            hospital_name = f"{random.choice(available_names)} {city_data['city']}"
+            if available_names:
+                hospital_name = f"{random.choice(available_names)} {city_data['city']}"
+            else:
+                # Generate a unique name with index
+                hospital_name = f"Tamil Nadu Medical Center {city_data['city']} {i+1}"
         
         hospital = Hospital(
             name=hospital_name,
@@ -153,33 +167,62 @@ def generate_mock_hospitals(count=40):
     return hospitals
 
 def generate_mock_blood_banks(count=35):
-    """Generate mock blood bank data for Tamil Nadu network - No SRM Blood Bank"""
+    """Generate mock blood bank data for Tamil Nadu network - Strategic placement for SRM"""
     blood_banks = []
     
-    # Generate diverse blood banks across Tamil Nadu (no SRM Blood Bank)
-    for i in range(count):
+    # First, create strategic blood banks with fixed coordinates for consistent distances
+    # Chennai Central Blood Bank - close to SRM for quick response
+    chennai_central = BloodBank(
+        name="Chennai Central Blood Bank",
+        address="Anna Salai, Chennai, Tamil Nadu",
+        city="Chennai",
+        state="Tamil Nadu",
+        latitude=13.0827,  # Chennai coordinates
+        longitude=80.2707,
+        contact_person="Dr. Chennai Director",
+        contact_email="chennai.central@bloodbank.tn.gov.in",
+        contact_phone="+91-44-28554444"
+    )
+    blood_banks.append(chennai_central)
+    
+    # Red Cross Blood Bank - strategic location
+    red_cross = BloodBank(
+        name="Red Cross Blood Bank Chennai",
+        address="Red Cross Road, Chennai, Tamil Nadu",
+        city="Chennai",
+        state="Tamil Nadu",
+        latitude=13.0527,  # Slightly south of Chennai center
+        longitude=80.2627,
+        contact_person="Dr. Red Cross Director",
+        contact_email="redcross.chennai@redcross.org",
+        contact_phone="+91-44-28553333"
+    )
+    blood_banks.append(red_cross)
+    
+    # Generate remaining blood banks across Tamil Nadu
+    for i in range(count - 2):  # -2 because we already added 2 strategic ones
         city_data = random.choice(TAMIL_NADU_CITIES)
         # Add realistic variation to coordinates
         lat_variation = random.uniform(-0.02, 0.02)
         lng_variation = random.uniform(-0.02, 0.02)
         
-        # Use a mix of predefined names and generated names for more variety
-        if random.random() < 0.6:  # 60% chance of using predefined names
-            used_names = [b.name for b in blood_banks]
-            available_names = [name for name in TAMIL_NADU_BLOOD_BANK_NAMES if name not in used_names]
-            
-            if not available_names:
-                available_names = TAMIL_NADU_BLOOD_BANK_NAMES
-            
+        # Ensure unique blood bank names by checking against already used names
+        used_names = [b.name for b in blood_banks]
+        
+        # Try predefined names first
+        available_names = [name for name in TAMIL_NADU_BLOOD_BANK_NAMES if f"{name} {city_data['city']}" not in used_names]
+        
+        if available_names:
             blood_bank_name = f"{random.choice(available_names)} {city_data['city']}"
-        else:  # 40% chance of using additional diverse names
-            used_names = [b.name for b in blood_banks]
-            available_names = [name for name in ADDITIONAL_BLOOD_BANK_NAMES if name not in used_names]
+        else:
+            # Try additional names
+            available_names = [name for name in ADDITIONAL_BLOOD_BANK_NAMES if f"{name} {city_data['city']}" not in used_names]
             
-            if not available_names:
-                available_names = ADDITIONAL_BLOOD_BANK_NAMES
-            
-            blood_bank_name = f"{random.choice(available_names)} {city_data['city']}"
+            if available_names:
+                blood_bank_name = f"{random.choice(available_names)} {city_data['city']}"
+            else:
+                # Generate a unique name with index
+                blood_bank_name = f"Tamil Nadu Blood Center {city_data['city']} {i+1}"
         
         blood_bank = BloodBank(
             name=blood_bank_name,

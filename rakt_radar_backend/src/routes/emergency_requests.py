@@ -128,7 +128,7 @@ def create_emergency_request():
         if urgency not in valid_urgency:
             return jsonify({'error': 'Invalid urgency level'}), 400
         
-        # Get hospital ID from user's entity
+        # Get hospital ID from user's entity (should be SRM Global Hospitals)
         from src.models.user import User
         user = User.query.get(user_id)
         if not user or user.role != 'hospital':
@@ -137,6 +137,13 @@ def create_emergency_request():
         hospital_id = user.entity_id
         if not hospital_id:
             return jsonify({'error': 'Hospital entity not found'}), 400
+        
+        # Verify this is SRM Global Hospitals
+        hospital = Hospital.query.get(hospital_id)
+        if hospital and 'SRM' in hospital.name:
+            print(f"🏥 SRM Global Hospitals creating emergency request: {hospital.name}")
+        else:
+            print(f"⚠️ Warning: Hospital {hospital.name if hospital else 'Unknown'} is not SRM Global Hospitals")
         
         # Call ML service for bank matching
         suggested_bank, confidence_score = ml_predict_bank(
@@ -184,7 +191,7 @@ def create_emergency_request():
 
 @emergency_requests_bp.route('/emergency_requests', methods=['GET'])
 def get_emergency_requests():
-    """Get emergency requests based on user role"""
+    """Get emergency requests based on user role with consistent distance/time calculations"""
     try:
         # Check authentication
         user_id = session.get('user_id')
@@ -209,7 +216,7 @@ def get_emergency_requests():
         else:
             return jsonify({'error': 'Unauthorized role'}), 403
         
-        # Include related data
+        # Include related data with consistent distance/time calculations
         requests_data = []
         for req in requests:
             req_dict = req.to_dict()
@@ -224,6 +231,15 @@ def get_emergency_requests():
                 bank = BloodBank.query.get(req.suggested_bank_id)
                 if bank:
                     req_dict['suggested_bank'] = bank.to_dict()
+                    
+                    # Calculate consistent distance and time for both hospital and blood bank views
+                    if hospital:
+                        distance_km = calculate_distance(
+                            hospital.latitude, hospital.longitude,
+                            bank.latitude, bank.longitude
+                        )
+                        req_dict['calculated_distance_km'] = round(distance_km, 1)
+                        req_dict['calculated_eta_minutes'] = ml_predict_eta(distance_km, req.urgency)
             
             # Get route details if exists
             route = Route.query.filter_by(request_id=req.id).first()
@@ -246,7 +262,7 @@ def get_demo_emergency_requests():
         # Get all emergency requests
         requests = EmergencyRequest.query.all()
         
-        # Include related data
+        # Include related data with consistent distance/time calculations
         requests_data = []
         for req in requests:
             req_dict = req.to_dict()
@@ -261,6 +277,15 @@ def get_demo_emergency_requests():
                 bank = BloodBank.query.get(req.suggested_bank_id)
                 if bank:
                     req_dict['suggested_bank'] = bank.to_dict()
+                    
+                    # Calculate consistent distance and time for demo consistency
+                    if hospital:
+                        distance_km = calculate_distance(
+                            hospital.latitude, hospital.longitude,
+                            bank.latitude, bank.longitude
+                        )
+                        req_dict['calculated_distance_km'] = round(distance_km, 1)
+                        req_dict['calculated_eta_minutes'] = ml_predict_eta(distance_km, req.urgency)
             
             # Get route details if exists
             route = Route.query.filter_by(request_id=req.id).first()
@@ -296,12 +321,16 @@ def create_demo_emergency_request():
         if urgency not in valid_urgency:
             return jsonify({'error': 'Invalid urgency level'}), 400
         
-        # Use a default hospital ID for demo (first hospital in database)
-        hospital = Hospital.query.first()
+        # Use SRM Global Hospitals specifically for demo
+        hospital = Hospital.query.filter(Hospital.name.like('%SRM%')).first()
+        if not hospital:
+            # Fallback to first hospital if SRM not found
+            hospital = Hospital.query.first()
         if not hospital:
             return jsonify({'error': 'No hospitals found in database'}), 404
         
         hospital_id = hospital.id
+        print(f"🏥 Using hospital: {hospital.name} for demo emergency request")
         
         # Call ML service for bank matching
         suggested_bank, confidence_score = ml_predict_bank(
