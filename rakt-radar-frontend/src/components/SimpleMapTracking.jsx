@@ -91,14 +91,14 @@ const EnhancedMapTracking = () => {
         quantity_ml: 450,
         source_blood_bank: 'Chennai Central Blood Bank',
         source_location: 'Chennai, Tamil Nadu',
-        destination: 'Apollo Hospitals Chennai',
-        distance_km: 45.2,
+        destination: 'SRM Global Hospitals',
+        distance_km: 18.5, // Distance from Chennai to Chengalpattu (SRM Global Hospitals)
         estimated_time_hours: 0.5, // 30 minutes for drone
         cost: 2200, // Slightly higher for drone delivery
         status: 'dispatched',
         coordinates: {
           source: [13.0827, 80.2707], // Chennai Central Blood Bank coordinates
-          destination: [13.0067, 80.2206], // Apollo Hospitals coordinates
+          destination: [12.6975, 79.9876], // SRM Global Hospitals coordinates (Chengalpattu)
           current: [13.0447, 80.2456] // Midpoint for drone start
         }
       });
